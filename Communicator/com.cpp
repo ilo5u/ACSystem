@@ -14,7 +14,7 @@ ACCom::ACCom(const std::wstring& address) :
 	_tokens(), _listener(nullptr),
 	_pulls(), _pulllocker(),
 	_pushs(), _pushlocker(),
-	_running(false), _replycontroller(), _semophare(nullptr)
+	_running(false), _replycontroller(), _pushsemophare(nullptr)
 {
 	uri_builder uri(address);
 	_listener = new http_listener(uri.to_uri().to_string());
@@ -37,13 +37,15 @@ ACCom::ACCom(const std::wstring& address) :
 			std::bind(&ACCom::_handle_delete, this, std::placeholders::_1)
 		);
 
-		_semophare = CreateSemaphore(NULL, 0, 0xFF, NULL);
+		_pullsemophare = CreateSemaphore(NULL, 0, 0xFF, NULL);
+		_pushsemophare = CreateSemaphore(NULL, 0, 0xFF, NULL);
 	}
 }
 
 ACCom::~ACCom()
 {
-	CloseHandle(_semophare);
+	CloseHandle(_pushsemophare);
+	CloseHandle(_pullsemophare);
 
 	if (_replycontroller.joinable())
 		_replycontroller.join();
@@ -65,14 +67,17 @@ ACCom::Handler ACCom::CreateHandler(const std::wstring& token)
 		_tokens.begin(), _tokens.end(), [&token](const std::pair<LPToken, std::list<http_request>>& cur) {
 		return token == *(cur.first);
 	});
+
 	if (exist == _tokens.end())
 	{
 		_tokens.push_back({ new Token{ token }, {} });
-		++exist;
+		exist = std::find_if(
+			_tokens.begin(), _tokens.end(), [&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+			return token == *(cur.first);
+		});
 	}
-	int64_t handler = conv((int64_t)(*exist).first);
 
-	return handler;
+	return conv((int64_t)(*exist).first);
 }
 
 bool ACCom::PushMessage(const ACMessage& message)
@@ -80,7 +85,7 @@ bool ACCom::PushMessage(const ACMessage& message)
 	_pushlocker.lock();
 
 	_pushs.push(message);
-	ReleaseSemaphore(_semophare, 0x1, NULL);
+	ReleaseSemaphore(_pushsemophare, 0x1, NULL);
 
 	_pushlocker.unlock();
 	return true;
@@ -88,11 +93,17 @@ bool ACCom::PushMessage(const ACMessage& message)
 
 ACMessage ACCom::PullMessage()
 {
+	ACMessage in{ 0, ACMsgType::INVALID, {} };
+	WaitForSingleObject(_pullsemophare, 1000);
+
 	_pulllocker.lock();
-	ACMessage message = _pulls.front();
-	_pulls.pop();
+	if (!_pulls.empty())
+	{
+		in = _pulls.front();
+		_pulls.pop();
+	}
 	_pulllocker.unlock();
-	return message;
+	return in;
 }
 
 pplx::task<void> ACCom::Start()
@@ -107,21 +118,73 @@ pplx::task<void> ACCom::Shutdown()
 	return _listener->close();
 }
 
+int64_t ACCom::_fetch(const Token& token, http_request& message)
+{
+	_tlocker.lock();
+	auto sender = std::find_if(_tokens.begin(), _tokens.end(),
+		[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+		return (*cur.first).compare(token) == 0;
+	});
+	int64_t handler = conv((int64_t)(*sender).first);
+	(*sender).second.push_back(std::move(message));
+	_tlocker.unlock();
+
+	return handler;
+}
+
 void ACCom::_handle_get(http_request message)
 {
 	//ucout << message.to_string() << std::endl;
 	//ucout << L"URI: " << message.relative_uri().to_string() << std::endl;
 	//ucout << L"Query: " << message.relative_uri().query() << std::endl;
 
-	auto queries = http::uri::split_query(http::uri::decode(message.relative_uri().query()));
 	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+	json::value body = message.extract_json().get();
 	try
 	{
-		if (paths[0].compare(L"api") == 0)
+		if (paths[0].compare(U("api")) == 0)
 		{
-			if (paths[1].compare(L"ac") == 0)
+			if (paths[1].compare(U("power")))
 			{
+				int64_t handler = _fetch(U("Admin"), message);
 
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::STARTUP, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("state")))
+			{
+				int64_t handler = _fetch(U("Admin"), message);
+				//int64_t rid = 0;
+				//swscanf(paths[2].c_str(), U("%ld"), &rid);
+				//body[U("RoomId")] = json::value::number(rid);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::MONITOR, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("ac")) == 0)
+			{
+				if (paths[2].compare(U("notify")) == 0)
+				{
+					int64_t handler = _fetch(paths[3], message);
+
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::TEMPNOTIFICATION, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
+				else
+				{
+					int64_t handler = _fetch(paths[2], message);
+
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::FETCHFEE, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
 			}
 		}
 		else
@@ -136,7 +199,6 @@ void ACCom::_handle_get(http_request message)
 
 	//Dbms* d  = new Dbms();
 	//d->connect();
-
 	//concurrency::streams::fstream::open_istream(U("static/index.html"), std::ios::in).then([=](concurrency::streams::istream is)
 	//{
 	//	message.reply(status_codes::OK, is, U("text/html"))
@@ -164,25 +226,28 @@ void ACCom::_handle_get(http_request message)
 
 void ACCom::_handle_put(http_request message)
 {
-	auto queries = http::uri::split_query(http::uri::decode(message.relative_uri().query()));
 	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+	json::value body = message.extract_json().get();
 	try
 	{
-		if (paths[0].compare(L"api") == 0)
+		if (paths[0].compare(U("api")) == 0)
 		{
-			if (paths[1].compare(L"ac") == 0)
+			if (paths[1].compare(U("ac")) == 0)
 			{
-				_tlocker.lock();
-				auto sender = std::find_if(_tokens.begin(), _tokens.end(), 
-					[&paths](const std::pair<LPToken, std::list<http_request>>& cur) {
-					return (*cur.first).compare(paths[2]) == 0;
-				});
-				int64_t token = conv((int64_t)(*sender).first);
-				(*sender).second.push_back(std::move(message));
-				_tlocker.unlock();
+				int64_t handler = _fetch(paths[2], message);
 
 				_pulllocker.lock();
-				_pulls.push(ACMessage{ token, ACMsgType::REQUESTON, message.relative_uri().query() });
+				_pulls.push(ACMessage{ handler, ACMsgType::REQUESTON, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("power")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::POWERON, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
 			}
 		}
@@ -200,18 +265,89 @@ void ACCom::_handle_put(http_request message)
 
 void ACCom::_handle_post(http_request message)
 {
-	ucout << message.to_string() << std::endl;
+	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+	json::value body = message.extract_json().get();
+	try
+	{
+		if (paths[0].compare(U("api")) == 0)
+		{
+			if (paths[1].compare(U("power")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), message);
 
-	std::wstring rep = U("WRITE YOUR OWN DELETE OPERATION");
-	message.reply(status_codes::OK, rep);
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::SETPARAM, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("ac")) == 0)
+			{
+				int64_t handler = _fetch(paths[2], message);
+				if (body.has_field(U("TargetTemp")))
+				{
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::SETTEMP, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
+				else if (body.has_field(U("FanSpeed")))
+				{
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::SETFANSPEED, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
+			}
+			
+		}
+		else
+		{
+
+		}
+	}
+	catch (...)
+	{
+
+	}
 	return;
 }
 
 void ACCom::_handle_delete(http_request message)
 {
-	ucout << message.to_string() << std::endl;
-	std::wstring rep = U("WRITE YOUR OWN PUT OPERATION");
-	message.reply(status_codes::OK, rep);
+	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+	json::value body = message.extract_json().get();
+	try
+	{
+		if (paths[0].compare(U("api")) == 0)
+		{
+			if (paths[1].compare(U("power")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::SHUTDOWN, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("ac")) == 0)
+			{
+				int64_t handler = _fetch(paths[2], message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::REQUESTOFF, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+		}
+		else
+		{
+
+		}
+	}
+	catch (...)
+	{
+
+	}
 	return;
 }
 
@@ -221,7 +357,7 @@ void ACCom::_reply()
 	while (_running)
 	{
 		out.type = ACMsgType::INVALID;
-		WaitForSingleObject(_semophare, 1000);
+		WaitForSingleObject(_pushsemophare, 1000);
 		
 		_pushlocker.lock();
 		if (!_pushs.empty())
@@ -231,16 +367,11 @@ void ACCom::_reply()
 		}
 		_pushlocker.unlock();
 
-		// TODO
-		LPToken token = nullptr;
-		switch (out.type)
+		if (out.type != ACMsgType::INVALID)
 		{
-		case ACMsgType::REQUESTON:
-		case ACMsgType::WAIT:
-		{
-			token = (LPToken)conv(out.token);
+			LPToken token = (LPToken)conv(out.token);
 			_tlocker.lock();
-			auto recver = std::find_if(_tokens.begin(), _tokens.end(), 
+			auto recver = std::find_if(_tokens.begin(), _tokens.end(),
 				[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
 				return cur.first == token;
 			});
@@ -250,61 +381,22 @@ void ACCom::_reply()
 				(*recver).second.erase((*recver).second.begin());
 				_tlocker.unlock();
 
-				json::value msg;
-				switch (out.type)
+				rep.reply(status_codes::OK, out.body)
+					.then([](pplx::task<void> t)
 				{
-				case ACMsgType::REQUESTON:
-				{
-					int64_t ttemp;
-					double_t fr;
-					double_t tf;
-					swscanf(out.info.c_str(),
-						L"State=ok\nTargetTemp=%lld\nFeerate=%lf\nFee=%lf\n",
-						&ttemp, &fr, &tf
-					);
+					try {
+						t.get();
+					}
+					catch (...) {
+						//
+					}
+				});
 
-					msg.parse["State"] = json::value("ok");
-					msg.parse["TargetTemp"] = json::value(ttemp);
-					msg.parse["Feerate"] = json::value(fr);
-					msg.parse["Fee"] = json::value(tf);
-					rep.reply(status_codes::OK, msg)
-						.then([](pplx::task<void> t)
-					{
-						try {
-							t.get();
-						}
-						catch (...) {
-							//
-						}
-					});
-				}
-					break;
-				case ACMsgType::WAIT:
-					msg.parse["State"] = json::value("wait");
-					rep.reply(status_codes::OK, msg)
-						.then([](pplx::task<void> t)
-					{
-						try {
-							t.get();
-						}
-						catch (...) {
-							//
-						}
-					});
-					break;
-				default:
-					break;
-				}
-			
 			}
 			catch (...)
 			{
 				_tlocker.unlock();
 			}
-		}
-			break;
-		default:
-			break;
 		}
 	}
 }

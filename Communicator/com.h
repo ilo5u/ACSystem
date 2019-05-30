@@ -13,14 +13,16 @@ enum class ACMsgType
 	REQUESTOFF,
 	SETTEMP,
 	SETFANSPEED,
+	FETCHFEE,
 	TEMPNOTIFICATION,
 	POWERON,
-	POWEROFF,
+	SETPARAM,
+	STARTUP,
+	SHUTDOWN,
 	MONITOR,
 	FETCHBILL,
 	FETCHINVOICE,
 	FETCHREPORT,
-	OK,
 	WAIT
 };
 
@@ -28,15 +30,18 @@ struct ACMessage
 {
 	int64_t token;
 	ACMsgType type;
-	std::wstring info;
+	json::value body;
+	
+	//std::map<utility::string_t, utility::string_t> info;
 
 	ACMessage() :
-		token(0), type(ACMsgType::INVALID), info()
+		token(0), type(ACMsgType::INVALID), body()
 	{
 	}
 
-	ACMessage(int64_t tk, ACMsgType tp, const std::wstring& msg) :
-		token(tk), type(tp), info(msg)
+	ACMessage(int64_t tk, ACMsgType tp, 
+		const json::value& msg) :
+		token(tk), type(tp), body(std::move(msg))
 	{
 	}
 };
@@ -66,7 +71,7 @@ public:
 	pplx::task<void> Shutdown();
 
 private:
-	typedef std::wstring Token, * LPToken;
+	typedef utility::string_t Token, * LPToken;
 	typedef std::vector<std::pair<LPToken, std::list<http_request>>> TokenIndics;
 	TokenIndics _tokens;
 	std::mutex _tlocker;
@@ -81,6 +86,8 @@ private:
 			return old;
 		}
 	} conv;
+
+	int64_t _fetch(const Token& token, http_request& message);
 
 private:
 	http_listener * _listener;
@@ -101,5 +108,6 @@ private:
 	bool _running;
 	void _reply();
 	std::thread _replycontroller;
-	Semophare _semophare;
+	Semophare _pullsemophare;
+	Semophare _pushsemophare;
 };

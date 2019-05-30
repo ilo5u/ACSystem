@@ -31,6 +31,22 @@ void ACLog::Shutdown()
 	}
 }
 
+std::wstring ACLog::Time()
+{
+	SYSTEMTIME st = { 0 };
+	GetLocalTime(&st);
+	WCHAR ct[0xFF];
+	wsprintf(ct, L"%d-%02d-%02d %02d:%02d:%02d ",
+		st.wYear,
+		st.wMonth,
+		st.wDay,
+		st.wHour,
+		st.wMinute,
+		st.wSecond
+	);
+	return ct;
+}
+
 bool ACLog::Log(const std::wstring& info)
 {
 	if (!_onlogging)
@@ -61,7 +77,6 @@ void ACLog::_persistence()
 	} while (!logger);
 
 	std::for_each(_flushout.begin(), _flushout.end(), [&logger](const std::wstring& out) {
-
 		logger << out.c_str() << std::endl;
 	});
 

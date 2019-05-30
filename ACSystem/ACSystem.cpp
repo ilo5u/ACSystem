@@ -2,6 +2,7 @@
 //
 
 #include "pch.h"
+#include "system.h"
 
 int main()
 {
@@ -11,6 +12,8 @@ int main()
 	std::wstring address = L"http://10.201.6.248:8080";
 	ACCom accom(address);
 	accom.Start().wait();
+
+	ACSystem acsystem{ accom, aclogger, {201, 202, 203, 204} };
 
 	int n;
 	std::cin >> n;

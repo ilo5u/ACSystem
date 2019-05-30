@@ -14,6 +14,7 @@ public:
 public:
 	void Start();
 	void Shutdown();
+	std::wstring Time();
 
 	bool Log(const std::wstring& info);
 

@@ -10,6 +10,8 @@
 #define PCH_H
 
 #include <cstdio>
+#include <Windows.h>
+#include <regex>
 #include <http_client.h>
 #include <filestream.h>
 #include <http_listener.h>              // HTTP server
@@ -20,6 +22,9 @@
 #include <interopstream.h>              // Bridges for integrating Async streams with STL and WinRT streams
 #include <rawptrstream.h>               // Async streams backed by raw pointer to memory
 #include <producerconsumerstream.h>     // Async streams for producer consumer scenarios
+
+#include <ctime>
+#include <cmath>
 
 #include "../Logger//log.h"
 #include "../Communicator/com.h"
