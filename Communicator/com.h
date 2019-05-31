@@ -41,7 +41,7 @@ struct ACMessage
 
 	ACMessage(int64_t tk, ACMsgType tp, 
 		const json::value& msg) :
-		token(tk), type(tp), body(std::move(msg))
+		token(tk), type(tp), body(msg)
 	{
 	}
 };

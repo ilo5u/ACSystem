@@ -125,11 +125,18 @@ int64_t ACCom::_fetch(const Token& token, http_request& message)
 		[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
 		return (*cur.first).compare(token) == 0;
 	});
-	int64_t handler = conv((int64_t)(*sender).first);
-	(*sender).second.push_back(std::move(message));
-	_tlocker.unlock();
+	if (sender != _tokens.end())
+	{
+		int64_t handler = conv((int64_t)(*sender).first);
+		(*sender).second.push_back(std::move(message));
+		_tlocker.unlock();
 
-	return handler;
+		return handler;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 void ACCom::_handle_get(http_request message)
@@ -167,24 +174,13 @@ void ACCom::_handle_get(http_request message)
 			}
 			else if (paths[1].compare(U("ac")) == 0)
 			{
-				if (paths[2].compare(U("notify")) == 0)
-				{
-					int64_t handler = _fetch(paths[3], message);
 
-					_pulllocker.lock();
-					_pulls.push(ACMessage{ handler, ACMsgType::TEMPNOTIFICATION, body });
-					ReleaseSemaphore(_pullsemophare, 1, NULL);
-					_pulllocker.unlock();
-				}
-				else
-				{
-					int64_t handler = _fetch(paths[2], message);
+				int64_t handler = _fetch(paths[2], message);
 
-					_pulllocker.lock();
-					_pulls.push(ACMessage{ handler, ACMsgType::FETCHFEE, body });
-					ReleaseSemaphore(_pullsemophare, 1, NULL);
-					_pulllocker.unlock();
-				}
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::FETCHFEE, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
 			}
 		}
 		else
@@ -234,12 +230,24 @@ void ACCom::_handle_put(http_request message)
 		{
 			if (paths[1].compare(U("ac")) == 0)
 			{
-				int64_t handler = _fetch(paths[2], message);
+				if (paths[2].compare(U("notify")) == 0)
+				{
+					int64_t handler = _fetch(paths[3], message);
 
-				_pulllocker.lock();
-				_pulls.push(ACMessage{ handler, ACMsgType::REQUESTON, body });
-				ReleaseSemaphore(_pullsemophare, 1, NULL);
-				_pulllocker.unlock();
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::TEMPNOTIFICATION, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
+				else
+				{
+					int64_t handler = _fetch(paths[2], message);
+
+					_pulllocker.lock();
+					_pulls.push(ACMessage{ handler, ACMsgType::REQUESTON, body });
+					ReleaseSemaphore(_pullsemophare, 1, NULL);
+					_pulllocker.unlock();
+				}
 			}
 			else if (paths[1].compare(U("power")) == 0)
 			{

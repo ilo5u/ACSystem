@@ -3,7 +3,7 @@
 
 ACLog::ACLog() :
 	_onlogging(false),
-	_maxn(0x80), _buffer(),
+	_maxn(0x40), _buffer(),
 	_flushout(), _onflushing(false)
 {
 }
@@ -36,7 +36,7 @@ std::wstring ACLog::Time()
 	SYSTEMTIME st = { 0 };
 	GetLocalTime(&st);
 	WCHAR ct[0xFF];
-	wsprintf(ct, L"%d-%02d-%02d %02d:%02d:%02d ",
+	wsprintf(ct, L"[%d-%02d-%02d %02d:%02d:%02d] ",
 		st.wYear,
 		st.wMonth,
 		st.wDay,
@@ -52,13 +52,15 @@ bool ACLog::Log(const std::wstring& info)
 	if (!_onlogging)
 		return false;
 
-	if (_buffer.size() == _maxn)
+	_buffer.push_back(info);
+	if (_buffer.size() > _maxn)
 	{
 		while (_onflushing);
 		std::swap(_buffer, _flushout);
 
 		_onflushing = true;
-		std::thread{ std::bind(&ACLog::_persistence, this) };
+		std::thread flush{ std::bind(&ACLog::_persistence, this) };
+		flush.detach();
 	}
 	return true;
 }
@@ -76,9 +78,11 @@ void ACLog::_persistence()
 		logger.open(filename, std::wofstream::app);
 	} while (!logger);
 
+	logger.sync_with_stdio(false);
 	std::for_each(_flushout.begin(), _flushout.end(), [&logger](const std::wstring& out) {
 		logger << out.c_str() << std::endl;
 	});
+	logger.flush();
 
 	_flushout.clear();
 

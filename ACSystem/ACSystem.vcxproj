@@ -75,7 +75,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest;C:\Users\livew\source\repos\ACSystem\ACSystem\pplx;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest\details;C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest;C:\Users\livew\source\repos\ACSystem\ACSystem\pplx;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\livew\source\repos\ACSystem\ACSystem\x64\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -83,7 +83,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest;C:\Users\livew\source\repos\ACSystem\ACSystem\pplx;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest\details;C:\Users\livew\source\repos\ACSystem\ACSystem\cpprest;C:\Users\livew\source\repos\ACSystem\ACSystem\pplx;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\livew\source\repos\ACSystem\ACSystem\x64\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -178,6 +178,9 @@
     </ProjectReference>
     <ProjectReference Include="..\Logger\Logger.vcxproj">
       <Project>{b29291d0-a7a8-40d8-abf0-a872e08be23f}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Usr\Usr.vcxproj">
+      <Project>{0c6401d0-27bb-4a78-a9a1-46dea0a9959f}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

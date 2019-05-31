@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Communicator", "Communicato
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Logger", "Logger\Logger.vcxproj", "{B29291D0-A7A8-40D8-ABF0-A872E08BE23F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Usr", "Usr\Usr.vcxproj", "{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -41,6 +43,14 @@ Global
 		{B29291D0-A7A8-40D8-ABF0-A872E08BE23F}.Release|x64.Build.0 = Release|x64
 		{B29291D0-A7A8-40D8-ABF0-A872E08BE23F}.Release|x86.ActiveCfg = Release|Win32
 		{B29291D0-A7A8-40D8-ABF0-A872E08BE23F}.Release|x86.Build.0 = Release|Win32
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Debug|x64.ActiveCfg = Debug|x64
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Debug|x64.Build.0 = Debug|x64
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Debug|x86.ActiveCfg = Debug|Win32
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Debug|x86.Build.0 = Debug|Win32
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Release|x64.ActiveCfg = Release|x64
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Release|x64.Build.0 = Release|x64
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Release|x86.ActiveCfg = Release|Win32
+		{0C6401D0-27BB-4A78-A9A1-46DEA0A9959F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
