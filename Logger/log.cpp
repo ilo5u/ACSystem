@@ -3,7 +3,7 @@
 
 ACLog::ACLog() :
 	_onlogging(false),
-	_maxn(0x1), _buffer(),
+	_maxn(0x20), _buffer(),
 	_flushout(), _onflushing(false)
 {
 }
