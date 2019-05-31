@@ -141,10 +141,6 @@ int64_t ACCom::_fetch(const Token& token, http_request& message)
 
 void ACCom::_handle_get(http_request message)
 {
-	//ucout << message.to_string() << std::endl;
-	//ucout << L"URI: " << message.relative_uri().to_string() << std::endl;
-	//ucout << L"Query: " << message.relative_uri().query() << std::endl;
-
 	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 	json::value body = message.extract_json().get();
 	try
@@ -162,10 +158,11 @@ void ACCom::_handle_get(http_request message)
 			}
 			else if (paths[1].compare(U("state")))
 			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
 				int64_t handler = _fetch(U("Admin"), message);
-				//int64_t rid = 0;
-				//swscanf(paths[2].c_str(), U("%ld"), &rid);
-				//body[U("RoomId")] = json::value::number(rid);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::MONITOR, body });
@@ -174,6 +171,9 @@ void ACCom::_handle_get(http_request message)
 			}
 			else if (paths[1].compare(U("ac")) == 0)
 			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
 
 				int64_t handler = _fetch(paths[2], message);
 
@@ -181,6 +181,54 @@ void ACCom::_handle_get(http_request message)
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHFEE, body });
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("detail")) == 0)
+			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
+				int64_t handler = _fetch(U("Reception"), message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::FETCHINVOICE, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("bill")) == 0)
+			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
+				int64_t handler = _fetch(U("Reception"), message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::FETCHBILL, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("report")) == 0)
+			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
+				int64_t type = 0;
+				swscanf(paths[3].c_str(), U("%I64d"), &type);
+				body[U("TypeReport")] = json::value::number(type);
+
+				int64_t datein = 0;
+				swscanf(paths[4].c_str(), U("%I64d"), &datein);
+				body[U("DateIn")] = json::value::number(datein);
+
+				int64_t handler = _fetch(U("Manager"), message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::FETCHREPORT, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+
 			}
 		}
 		else
@@ -192,30 +240,6 @@ void ACCom::_handle_get(http_request message)
 	{
 
 	}
-
-	//Dbms* d  = new Dbms();
-	//d->connect();
-	//concurrency::streams::fstream::open_istream(U("static/index.html"), std::ios::in).then([=](concurrency::streams::istream is)
-	//{
-	//	message.reply(status_codes::OK, is, U("text/html"))
-	//		.then([](pplx::task<void> t)
-	//	{
-	//		try {
-	//			t.get();
-	//		}
-	//		catch (...) {
-	//			//
-	//		}
-	//	});
-	//}).then([=](pplx::task<void>t)
-	//{
-	//	try {
-	//		t.get();
-	//	}
-	//	catch (...) {
-	//		message.reply(status_codes::InternalError, U("INTERNAL ERROR "));
-	//	}
-	//});
 
 	return;
 }
@@ -232,6 +256,10 @@ void ACCom::_handle_put(http_request message)
 			{
 				if (paths[2].compare(U("notify")) == 0)
 				{
+					int64_t rid = 0;
+					swscanf(paths[3].c_str(), U("%I64d"), &rid);
+					body[U("RoomId")] = json::value::number(rid);
+
 					int64_t handler = _fetch(paths[3], message);
 
 					_pulllocker.lock();
@@ -241,6 +269,10 @@ void ACCom::_handle_put(http_request message)
 				}
 				else
 				{
+					int64_t rid = 0;
+					swscanf(paths[2].c_str(), U("%I64d"), &rid);
+					body[U("RoomId")] = json::value::number(rid);
+
 					int64_t handler = _fetch(paths[2], message);
 
 					_pulllocker.lock();
@@ -290,6 +322,10 @@ void ACCom::_handle_post(http_request message)
 			}
 			else if (paths[1].compare(U("ac")) == 0)
 			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
 				int64_t handler = _fetch(paths[2], message);
 				if (body.has_field(U("TargetTemp")))
 				{
@@ -339,6 +375,10 @@ void ACCom::_handle_delete(http_request message)
 			}
 			else if (paths[1].compare(U("ac")) == 0)
 			{
+				int64_t rid = 0;
+				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				body[U("RoomId")] = json::value::number(rid);
+
 				int64_t handler = _fetch(paths[2], message);
 
 				_pulllocker.lock();

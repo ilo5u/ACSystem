@@ -76,8 +76,7 @@ void ACSystem::_requeston(int64_t id, double_t ctemp)
 			_acws.push_back(new ACWObj{ *(*room), _usr.admin.deffanspeed, 120 });
 			_wlocker.unlock();
 
-			msg[U("State")] = json::value::string(U("wait"));
-
+			msg[U("State")] = json::value::string(U("WAIT"));
 			_log.Log(_log.Time().append(rid).append(U(" Request on has been delayed.")));
 		}
 		else
@@ -87,23 +86,24 @@ void ACSystem::_requeston(int64_t id, double_t ctemp)
 			_acss.back()->Serve(ctemp);
 			_slocker.unlock();
 
-			msg[U("State")] = json::value::string(U("ok"));
-			if ((*room)->mode == Room::mode_t::HOT)
-				msg[U("Mode")] = json::value::string(U("HOT"));
-			else if ((*room)->mode == Room::mode_t::COOL)
-				msg[U("Mode")] = json::value::string(U("COOL"));
-			msg[U("TargetTemp")] = json::value::number((*room)->GetTargetTemp());
-			msg[U("FeeRate")] = json::value::number(_usr.admin.frate[(*room)->GetFanspeed()]);
-			msg[U("Fee")] = json::value::number((*room)->GetTotalfee());
-
+			msg[U("State")] = json::value::string(U("ON"));
 			_log.Log(_log.Time().append(rid).append(U(" Request on has been handled.")));
 		}
 	}
 	catch (...)
 	{
-		msg[U("State")] = json::value::string(U("error"));
+		msg[U("State")] = json::value::string(U("ERROR"));
 		_log.Log(_log.Time().append(L"Room does not exist."));
 	}
+
+	if (_usr.admin.defmode == Room::mode_t::HOT)
+		msg[U("Mode")] = json::value::string(U("HOT"));
+	else if (_usr.admin.defmode == Room::mode_t::COOL)
+		msg[U("Mode")] = json::value::string(U("COOL"));
+	msg[U("TargetTemp")] = json::value::number(_usr.admin.deftemp);
+	msg[U("FeeRate")] = json::value::number(_usr.admin.frate[_usr.admin.deffanspeed]);
+	msg[U("Fee")] = json::value::number(0.0);
+	msg[U("FanSpeed")] = json::value::number((int64_t)_usr.admin.deffanspeed);
 
 	_com.PushMessage(ACMessage{ (*room)->handler, ACMsgType::REQUESTON, msg });
 	(*room)->rponsecnt = 1;
@@ -197,16 +197,19 @@ void ACSystem::_settemp(int64_t id, double_t ttemp)
 		if (ttemp >= _usr.admin.ltemp && ttemp <= _usr.admin.htemp)
 		{
 			(*room)->SetTargetTemp(ttemp);
-			msg[U("isOk")] = json::value::string(U("True"));
+			//msg[U("isOk")] = json::value::string(U("True"));
+			msg[U("isOK")] = json::value::boolean(true);
 		}
 		else
 		{
-			msg[U("isOk")] = json::value::string(U("False"));
+			//msg[U("isOk")] = json::value::string(U("False"));
+			msg[U("isOK")] = json::value::boolean(false);
 		}
 	}
 	catch (...)
 	{
-		msg[U("isOk")] = json::value::string(U("False"));
+		//msg[U("isOk")] = json::value::string(U("False"));
+		msg[U("isOK")] = json::value::boolean(false);
 		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
 	}
 
@@ -424,7 +427,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 
 		(*room)->ctemp = ctemp;
 
-		int64_t state = 0;
+		int64_t state = (int64_t)(*room)->inservice;
 		double_t ttemp = (*room)->GetTargetTemp();
 		if (std::fabs(ctemp - ttemp) < 1.0)
 		{
@@ -484,11 +487,18 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 			_slocker.unlock();
 		}
 
-		msg[U("ACState")] = json::value::number(state);
+		if (state == 0)
+			msg[U("State")] = json::value::string(U("OFF"));
+		else if (state == 1)
+			msg[U("State")] = json::value::string(U("ON"));
+		else if (state == 2)
+			msg[U("State")] = json::value::string(U("WAIT"));
+		else if (state == 3)
+			msg[U("State")] = json::value::string(U("SLEEP"));
 	}
 	catch (...)
 	{
-		msg[U("ACState")] = json::value::number(0);
+		msg[U("State")] = json::value::string(U("OFF"));
 		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
 	}
 

@@ -9,17 +9,24 @@ Bill::Bill(Room* room, ACDbms& dbms) :
 json::value Bill::Load(time_t datein, time_t dateout)
 {
 	json::array data = _dbms.Select(ACDbms::obj_t::BILL, _room->id, datein, dateout).as_array();
-	double_t fee = 0.0;
-	for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
-		fee += (*elem)[U("totalfee")].as_double();
 
-	json::value bill;
-	bill[U("RoomId")] = json::value::number(_room->id);
-	bill[U("TotalFee")] = json::value::number(fee);
-	bill[U("DateIn")] = json::value::number(datein);
-	bill[U("DateOut")] = json::value::number(dateout);
+	try
+	{
+		double_t fee = 0.0;
+		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
+			fee += (*elem)[U("totalfee")].as_double();
 
-	return bill;
+		json::value bill;
+		bill[U("RoomId")] = json::value::number(_room->id);
+		bill[U("TotalFee")] = json::value::number(fee);
+		bill[U("DateIn")] = json::value::number(datein);
+		bill[U("DateOut")] = json::value::number(dateout);
+		return bill;
+	}
+	catch (...)
+	{
+		return {};
+	}
 }
 
 Report::Report(Room* room, ACDbms& dbms) :
@@ -29,22 +36,63 @@ Report::Report(Room* room, ACDbms& dbms) :
 
 void Report::Store(int64_t onoff, time_t ontime, time_t offtime, double_t totalfee, int64_t dptcount, int64_t rdrcount, int64_t stpcount, int64_t sfscount)
 {
-	json::value data;
-	data[U("roomid")] = json::value::number(_room->id);
-	data[U("onoff")] = json::value::number(onoff);
-	data[U("ontime")] = json::value::number(ontime);
-	data[U("offtime")] = json::value::number(offtime);
-	data[U("totalfee")] = json::value::number(totalfee);
-	data[U("dptcount")] = json::value::number(dptcount);
-	data[U("rdrcount")] = json::value::number(rdrcount);
-	data[U("stpcount")] = json::value::number(stpcount);
-	data[U("sfscount")] = json::value::number(sfscount);
-	_dbms.Insert(ACDbms::obj_t::REPORT, data);
+	try
+	{
+		json::value data;
+		data[U("roomid")] = json::value::number(_room->id);
+		data[U("onoff")] = json::value::number(onoff);
+		data[U("ontime")] = json::value::number(ontime);
+		data[U("offtime")] = json::value::number(offtime);
+		data[U("totalfee")] = json::value::number(totalfee);
+		data[U("dptcount")] = json::value::number(dptcount);
+		data[U("rdrcount")] = json::value::number(rdrcount);
+		data[U("stpcount")] = json::value::number(stpcount);
+		data[U("sfscount")] = json::value::number(sfscount);
+		_dbms.Insert(ACDbms::obj_t::REPORT, data);
+	}
+	catch (...)
+	{
+	}
 }
 
 json::value Report::Load(time_t datein, time_t dateout)
 {
-	return _dbms.Select(ACDbms::obj_t::REPORT, _room->id, datein, dateout);
+	json::array data = _dbms.Select(ACDbms::obj_t::REPORT, _room->id, datein, dateout).as_array();
+	try
+	{
+		int64_t onoff = 0;
+		int64_t duration = 0;
+		double_t totalfee = 0;
+		int64_t dptcount = 0;
+		int64_t rdrcount = 0;
+		int64_t stpcount = 0;
+		int64_t sfscount = 0;
+		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
+		{
+			onoff += (*elem).at(U("TimesOfOnOff")).as_integer();
+			duration += (*elem).at(U("Duration")).as_integer();
+			totalfee += (*elem).at(U("TotalFee")).as_double();
+			dptcount += (*elem).at(U("TimesOfDisptch")).as_integer();
+			rdrcount += (*elem).at(U("TimesOfRDR")).as_integer();
+			stpcount += (*elem).at(U("TimesOfChangeTemp")).as_integer();
+			sfscount += (*elem).at(U("TimesOfChangeFanSpeed")).as_integer();
+		}
+
+		json::value report;
+		report[U("RoomId")] = json::value::number(_room->id);
+		report[U("TimesOfOnOff")] = json::value::number(onoff);
+		report[U("Duration")] = json::value::number(duration);
+		report[U("TotalFee")] = json::value::number(totalfee);
+		report[U("TimesOfDispatch")] = json::value::number(dptcount);
+		report[U("NumberOfRDR")] = json::value::number(rdrcount);
+		report[U("TimesOfChangeTemp")] = json::value::number(stpcount);
+		report[U("TimesOfChangeFanSpeed")] = json::value::number(sfscount);
+		return report;
+	}
+	catch (...)
+	{
+		return {};
+	}
 }
 
 Invoice::Invoice(Room* room, ACDbms& dbms) :

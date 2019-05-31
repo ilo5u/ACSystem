@@ -12,9 +12,9 @@ void ACSystem::_admin(const ACMessage& msg)
 			_poweron();
 			break;
 		case ACMsgType::SETPARAM:
-			if (msg.body.at(U("State")).as_string().compare(U("HOT")) == 0)
+			if (msg.body.at(U("Mode")).as_string().compare(U("HOT")) == 0)
 				mode = Room::mode_t::HOT;
-			else if (msg.body.at(U("State")).as_string().compare(U("COOL")) == 0)
+			else if (msg.body.at(U("Mode")).as_string().compare(U("COOL")) == 0)
 				mode = Room::mode_t::COOL;
 			_setparam(
 				mode,
@@ -80,7 +80,7 @@ void ACSystem::_setparam(Room::mode_t mode, double_t ht, double_t lt, double_t d
 	if (_usr.admin.state != Admin::state_t::SET
 		|| dt < lt || dt > ht || lt > ht)
 	{
-		msg[U("isOk")] = json::value::string(U("False"));
+		msg[U("isOK")] = json::value::boolean(false);
 		_log.Log(_log.Time().append(U("Set params request has been refuesed.")));
 	}
 	else
@@ -97,7 +97,7 @@ void ACSystem::_setparam(Room::mode_t mode, double_t ht, double_t lt, double_t d
 		_usr.admin.frate[Room::speed_t::HGH] = hf;
 		_usr.admin.deffanspeed = Room::speed_t::LOW;
 
-		msg[U("isOk")] = json::value::string(U("True"));
+		msg[U("isOK")] = json::value::boolean(true);
 		_log.Log(_log.Time().append(U("Set params correctly.")));
 	}
 
@@ -211,7 +211,7 @@ void ACSystem::_shutdown()
 	json::value msg;
 	if (_usr.admin.state != Admin::state_t::READY)
 	{
-		msg[U("isOk")] = json::value::string(U("False"));
+		msg[U("isOK")] = json::value::boolean(false);
 		_log.Log(_log.Time().append(U("Failed to shutdown the system.")));
 	}
 	else
@@ -227,7 +227,7 @@ void ACSystem::_shutdown()
 
 			_onstartup = false;
 
-			msg[U("isOk")] = json::value::string(U("True"));
+			msg[U("isOK")] = json::value::boolean(true);
 			_log.Log(_log.Time().append(U("Shutdown the system correctly.")));
 
 			if (_ccontroller.joinable())
@@ -238,7 +238,7 @@ void ACSystem::_shutdown()
 		}
 		else
 		{
-			msg[U("isOk")] = json::value::string(U("False"));
+			msg[U("isOK")] = json::value::boolean(false);
 			_log.Log(_log.Time().append(U("Failed to shutdown the system (Some rooms are in service).")));
 		}
 	}
