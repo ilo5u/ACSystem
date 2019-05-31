@@ -9,6 +9,7 @@ public:
 		_duration(0)
 	{
 		r.state = Room::state_t::SERVICE;
+		r.dptcount++;
 	}
 
 	~ACSObj()
@@ -61,6 +62,7 @@ public:
 		timestamp(std::time(nullptr)), duration(delay)
 	{
 		r.state = Room::state_t::SUSPEND;
+		r.dptcount++;
 	}
 
 	~ACWObj() = default;
@@ -80,7 +82,7 @@ public:
 class ACSystem
 {
 public:
-	ACSystem(ACCom& com, ACLog& log, const std::initializer_list<int64_t>& roomids);
+	ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::initializer_list<int64_t>& roomids);
 	~ACSystem();
 
 	ACSystem(const ACSystem&) = delete;

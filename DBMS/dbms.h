@@ -1,4 +1,5 @@
 #pragma once
+#include <sqlext.h>
 
 class ACDbms
 {
@@ -20,8 +21,16 @@ public:
 	};
 
 public:
-	void Insert(obj_t obj, json::value data);
+	bool Connect();
+	void Disconnect();
+
+	void Insert(obj_t obj, web::json::value data);
+	web::json::value Select(obj_t obj, int64_t roomid, time_t datein, time_t dateout);
 
 private:
-	json::value _data;
+	void _insert(obj_t obj, web::json::value data);
+
+private:
+	SQLHENV _env;
+	SQLHDBC _con;
 };

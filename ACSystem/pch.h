@@ -26,6 +26,7 @@
 #include <ctime>
 #include <cmath>
 
+#include "../DBMS/dbms.h"
 #include "../Logger//log.h"
 #include "../Communicator/com.h"
 #include "../Usr/usr.h"

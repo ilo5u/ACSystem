@@ -26,4 +26,5 @@
 #include <ctime>
 #include <cmath>
 
+#include "../DBMS/dbms.h"
 #include "../Communicator/com.h"

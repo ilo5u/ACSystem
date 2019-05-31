@@ -11,9 +11,33 @@ struct UBase
 	bool inservice{ false };
 };
 
-struct Bill
+class Room;
+class Bill
 {
+public:
+	Bill(Room* room, ACDbms& dbms);
 
+public:
+	json::value Load(time_t datein, time_t dateout);
+
+private:
+	Room* _room;
+	ACDbms& _dbms;
+};
+
+class Report
+{
+public:
+	Report(Room* room, ACDbms& dbms);
+
+public:
+	void Store(int64_t onoff, time_t ontime, time_t offtime, double_t totalfee, 
+		int64_t dptcount, int64_t rdrcount, int64_t stpcount, int64_t sfscount);
+	json::value Load(time_t datein, time_t dateout);
+
+private:
+	Room* _room;
+	ACDbms& _dbms;
 };
 
 class Invoice
@@ -28,23 +52,20 @@ public:
 		SETFANSPEED
 	};
 
-	struct record_t
-	{
-		time_t request;
-		time_t duration;
-		double_t fanspeed;
-		double_t feerate;
-		double_t fee;
-	};
+public:
+	Invoice(Room* room, ACDbms& dbms);
 
 public:
 	void Prepare(opt_t opt, time_t request);
 	void Store(opt_t opt, time_t response, int64_t fanspeed, double_t feerate, double_t fee);
-	std::list<record_t> Load(time_t datein, time_t dateout);
+	json::value Load(time_t datein, time_t dateout);
 
 private:
 	std::mutex _plocker;
 	std::map<opt_t, time_t> _prep;
+
+	Room* _room;
+	ACDbms& _dbms;
 };
 
 class Room :
@@ -86,7 +107,7 @@ public:
 	};
 
 public:
-	Room(int64_t roomid);
+	Room(int64_t roomid, ACDbms& dbms);
 	~Room();
 
 public:
@@ -97,7 +118,7 @@ public:
 	std::atomic<double_t> ctemp{ 26.0 };
 
 	std::atomic<state_t> state{ state_t::STOPPED };
-	std::atomic<time_t> datein{ 0 };
+	std::atomic<time_t> ontime{ 0 };
 	std::atomic<time_t> duration{ 0 };
 
 	std::atomic<int64_t> dptcount{ 0 };
@@ -107,6 +128,7 @@ public:
 
 	Bill bill;
 	Invoice invoice;
+	Report report;
 
 private:
 	std::atomic<double_t> _ttemp{ 28.0 };
@@ -196,6 +218,11 @@ struct Mgr :
 		MONTH,
 		YEAR
 	};
+
+	const time_t day = 60 * 60 * 24;
+	const time_t week = 60 * 60 * 24 * 7;
+	const time_t month = 60 * 60 * 24 * 30;
+	const time_t year = 60 * 60 * 24 * 365;
 };
 
 struct ACUsr

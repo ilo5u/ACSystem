@@ -32,5 +32,17 @@
     <ClCompile Include="usr.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="room.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="admin.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="mgr.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="rpt.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

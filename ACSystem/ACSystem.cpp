@@ -13,11 +13,10 @@ int main()
 	ACCom accom(address);
 	accom.Start().wait();
 
-	ACSystem acsystem{ accom, aclogger, {201, 202, 203, 204} };
+	ACDbms acdbms;
+	acdbms.Connect();
 
-	int n;
-	std::cin >> n;
-	accom.Shutdown();
+	ACSystem acsystem{ accom, aclogger, acdbms, {201, 202, 203, 204} };
 }
 
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单

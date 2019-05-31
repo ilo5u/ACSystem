@@ -1,7 +1,7 @@
 #include "pch.h"
 #include "system.h"
 
-ACSystem::ACSystem(ACCom& com, ACLog& log, const std::initializer_list<int64_t>& roomids) :
+ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::initializer_list<int64_t>& roomids) :
 	_com(com), _log(log),
 	_capacity(0x3),
 	_mcontroller()
@@ -11,8 +11,8 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, const std::initializer_list<int64_t>&
 	_usr.rpt.handler = _com.CreateHandler(L"Reception");
 	
 	ACUsr& usr = _usr;
-	std::for_each(roomids.begin(), roomids.end(), [&usr, &com](int64_t roomid) {
-		usr.rooms.push_back(new Room{ roomid });
+	std::for_each(roomids.begin(), roomids.end(), [&usr, &com, &dbms](int64_t roomid) {
+		usr.rooms.push_back(new Room{ roomid, dbms });
 
 		wchar_t rid[0xF];
 		wsprintf(rid, L"%ld", roomid);
