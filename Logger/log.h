@@ -19,11 +19,11 @@ public:
 	bool Log(const std::wstring& info);
 
 private:
-	bool _onlogging;
+	std::atomic<bool> _onlogging;
 
 	const int32_t _maxn;
 	std::list<std::wstring> _buffer;
 	std::list<std::wstring> _flushout;
-	bool _onflushing;
+	std::atomic<bool> _onflushing;
 	void _persistence();
 };

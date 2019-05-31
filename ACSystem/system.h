@@ -8,7 +8,7 @@ public:
 		_running(true), _sid(std::bind(&ACSObj::_service, this)), _dlocker(),
 		_duration(0)
 	{
-		r.SetState(Room::state_t::SERVICE);
+		r.state = Room::state_t::SERVICE;
 	}
 
 	~ACSObj()
@@ -30,7 +30,7 @@ public:
 	time_t timestamp;
 
 private:
-	bool _running;
+	std::atomic<bool> _running;
 	std::thread _sid;
 	std::mutex _dlocker;
 	time_t _duration;
@@ -53,20 +53,6 @@ private:
 	}
 };
 
-//class ACServiceQueue
-//{
-//public:
-//	ACServiceQueue();
-//	~ACServiceQueue();
-//
-//	ACServiceQueue(const ACServiceQueue&) = delete;
-//	ACServiceQueue(ACServiceQueue&&) = delete;
-//	ACServiceQueue& operator=(const ACServiceQueue&) = delete;
-//	ACServiceQueue& operator=(ACServiceQueue&&) = delete;
-//private:
-//	std::list<ACSObj> _objs;
-//};
-
 class ACWObj
 {
 public:
@@ -74,7 +60,7 @@ public:
 		room(r), tfanspeed(tf),
 		timestamp(std::time(nullptr)), duration(delay)
 	{
-		r.SetState(Room::state_t::SUSPEND);
+		r.state = Room::state_t::SUSPEND;
 	}
 
 	~ACWObj() = default;
@@ -90,35 +76,6 @@ public:
 	time_t timestamp;
 	time_t duration;
 };
-
-//class ACWaitQueue
-//{
-//public:
-//	ACWaitQueue();
-//	~ACWaitQueue();
-//
-//	ACWaitQueue(const ACWaitQueue&) = delete;
-//	ACWaitQueue(ACWaitQueue&&) = delete;
-//	ACWaitQueue& operator=(const ACWaitQueue&) = delete;
-//	ACWaitQueue& operator=(ACWaitQueue&&) = delete;
-//private:
-//	std::list<ACWObj> _objs;
-//};
-
-//class ACDispatcher
-//{
-//public:
-//	ACDispatcher();
-//	~ACDispatcher();
-//
-//	ACDispatcher(const ACDispatcher&) = delete;
-//	ACDispatcher(ACDispatcher&&) = delete;
-//	ACDispatcher& operator=(const ACDispatcher&) = delete;
-//	ACDispatcher& operator=(ACDispatcher&&) = delete;
-//private:
-//	std::list<ACSObj> _acss;
-//	std::list<ACWObj> _acws;
-//};
 
 class ACSystem
 {
@@ -146,7 +103,7 @@ private:
 	std::thread _mcontroller;
 	void _master();
 
-	bool _onstartup;
+	std::atomic<bool> _onstartup;
 	std::thread _ccontroller;
 	void _check();
 private:

@@ -105,7 +105,7 @@ private:
 	std::queue<ACMessage> _pushs;
 	std::mutex _pushlocker;
 
-	bool _running;
+	std::atomic<bool> _running;
 	void _reply();
 	std::thread _replycontroller;
 	Semophare _pullsemophare;

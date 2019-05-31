@@ -15,3 +15,4 @@
 #include <queue>
 #include <mutex>
 #include <fstream>
+#include <atomic>
