@@ -6,18 +6,28 @@ void ACSystem::_rpt(const ACMessage& msg)
 	switch (msg.type)
 	{
 	case ACMsgType::FETCHBILL:
-		_fetchbill(
-			msg.body.at(U("RoomId")).as_integer(),
-			msg.body.at(U("DateIn")).as_integer(),
-			msg.body.at(U("DateOut")).as_integer()
-		);
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("DateIn"))
+			&& msg.body.has_field(U("DateOut")))
+		{
+			_fetchbill(
+				msg.body.at(U("RoomId")).as_integer(),
+				msg.body.at(U("DateIn")).as_integer(),
+				msg.body.at(U("DateOut")).as_integer()
+			);
+		}
 		break;
 	case ACMsgType::FETCHINVOICE:
-		_fetchinvoice(
-			msg.body.at(U("RoomId")).as_integer(),
-			msg.body.at(U("DateIn")).as_integer(),
-			msg.body.at(U("DateOut")).as_integer()
-		);
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("DateIn"))
+			&& msg.body.has_field(U("DateOut")))
+		{
+			_fetchinvoice(
+				msg.body.at(U("RoomId")).as_integer(),
+				msg.body.at(U("DateIn")).as_integer(),
+				msg.body.at(U("DateOut")).as_integer()
+			);
+		}
 		break;
 	default:
 		break;
@@ -48,7 +58,7 @@ void ACSystem::_fetchbill(int64_t roomid, time_t din, time_t dout)
 		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
 	}
 
-	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHREPORT, msg });
+	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHBILL, msg });
 	_usr.rpt.rponsecnt++;
 }
 
@@ -75,6 +85,6 @@ void ACSystem::_fetchinvoice(int64_t roomid, time_t din, time_t dout)
 		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
 	}
 
-	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHREPORT, msg });
+	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHINVOICE, msg });
 	_usr.rpt.rponsecnt++;
 }

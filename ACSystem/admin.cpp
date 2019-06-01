@@ -12,19 +12,28 @@ void ACSystem::_admin(const ACMessage& msg)
 			_poweron();
 			break;
 		case ACMsgType::SETPARAM:
-			if (msg.body.at(U("Mode")).as_string().compare(U("HOT")) == 0)
-				mode = Room::mode_t::HOT;
-			else if (msg.body.at(U("Mode")).as_string().compare(U("COOL")) == 0)
-				mode = Room::mode_t::COOL;
-			_setparam(
-				mode,
-				msg.body.at(U("TempHighLimit")).as_double(),
-				msg.body.at(U("TempLowLimit")).as_double(),
-				msg.body.at(U("DefaultTargetTemp")).as_double(),
-				msg.body.at(U("FeeRateH")).as_double(),
-				msg.body.at(U("FeeRateM")).as_double(),
-				msg.body.at(U("FeeRateL")).as_double()
-			);
+			if (msg.body.has_field(U("Mode"))
+				&& msg.body.has_field(U("TempHighLimit"))
+				&& msg.body.has_field(U("TempLowLimit"))
+				&& msg.body.has_field(U("DefaultTargetTemp"))
+				&& msg.body.has_field(U("FeeRateH"))
+				&& msg.body.has_field(U("FeeRateM"))
+				&& msg.body.has_field(U("FeeRateL")))
+			{
+				if (msg.body.at(U("Mode")).as_string().compare(U("HOT")) == 0)
+					mode = Room::mode_t::HOT;
+				else if (msg.body.at(U("Mode")).as_string().compare(U("COOL")) == 0)
+					mode = Room::mode_t::COOL;
+				_setparam(
+					mode,
+					msg.body.at(U("TempHighLimit")).as_double(),
+					msg.body.at(U("TempLowLimit")).as_double(),
+					msg.body.at(U("DefaultTargetTemp")).as_double(),
+					msg.body.at(U("FeeRateH")).as_double(),
+					msg.body.at(U("FeeRateM")).as_double(),
+					msg.body.at(U("FeeRateL")).as_double()
+				);
+			}
 			break;
 		case ACMsgType::STARTUP:
 			_startup();
@@ -33,7 +42,8 @@ void ACSystem::_admin(const ACMessage& msg)
 			_shutdown();
 			break;
 		case ACMsgType::MONITOR:
-			_monitor(msg.body.at(U("RoomId")).as_integer());
+			if (msg.body.has_field(U("RoomId")))
+				_monitor(msg.body.at(U("RoomId")).as_integer());
 			break;
 		default:
 			break;

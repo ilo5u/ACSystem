@@ -232,15 +232,23 @@ void ACCom::_handle_get(http_request message)
 				_pulllocker.unlock();
 
 			}
+			else
+			{
+				message.reply(status_codes::BadRequest);
+			}
 		}
 		else
 		{
-
+			message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
 	{
-
+		message.reply(status_codes::BadRequest);
+		_listener->support(
+			methods::GET,
+			std::bind(&ACCom::_handle_get, this, std::placeholders::_1)
+		);
 	}
 
 	return;
@@ -293,15 +301,22 @@ void ACCom::_handle_put(http_request message)
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
 			}
+			{
+				message.reply(status_codes::BadRequest);
+			}
 		}
 		else
 		{
-
+			message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
 	{
-
+		message.reply(status_codes::BadRequest);
+		_listener->support(
+			methods::PUT,
+			std::bind(&ACCom::_handle_put, this, std::placeholders::_1)
+		);
 	}
 	return;
 }
@@ -345,17 +360,27 @@ void ACCom::_handle_post(http_request message)
 					ReleaseSemaphore(_pullsemophare, 1, NULL);
 					_pulllocker.unlock();
 				}
+				{
+					message.reply(status_codes::BadRequest);
+				}
 			}
-			
+			else
+			{
+				message.reply(status_codes::BadRequest);
+			}
 		}
 		else
 		{
-
+			message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
 	{
-
+		message.reply(status_codes::BadRequest);
+		_listener->support(
+			methods::POST,
+			std::bind(&ACCom::_handle_post, this, std::placeholders::_1)
+		);
 	}
 	return;
 }
@@ -391,15 +416,23 @@ void ACCom::_handle_delete(http_request message)
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
 			}
+			else
+			{
+				message.reply(status_codes::BadRequest);
+			}
 		}
 		else
 		{
-
+			message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
 	{
-
+		message.reply(status_codes::BadRequest);
+		_listener->support(
+			methods::DEL,
+			std::bind(&ACCom::_handle_delete, this, std::placeholders::_1)
+		);
 	}
 	return;
 }

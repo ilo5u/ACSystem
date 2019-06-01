@@ -6,11 +6,16 @@ void ACSystem::_mgr(const ACMessage& msg)
 	switch (msg.type)
 	{
 	case ACMsgType::FETCHREPORT:
-		_fetchreport(
-			msg.body.at(U("RoomId")).as_integer(),
-			(Mgr::rtype_t)msg.body.at(U("TypeReport")).as_integer(),
-			msg.body.at(U("DateIn")).as_integer()
-		);
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("TypeReport"))
+			&& msg.body.has_field(U("DateIn")))
+		{
+			_fetchreport(
+				msg.body.at(U("RoomId")).as_integer(),
+				(Mgr::rtype_t)msg.body.at(U("TypeReport")).as_integer(),
+				msg.body.at(U("DateIn")).as_integer()
+			);
+		}
 		break;
 	default:
 		break;

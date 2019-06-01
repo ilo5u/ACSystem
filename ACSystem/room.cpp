@@ -11,31 +11,48 @@ void ACSystem::_room(const ACMessage& msg)
 		switch (msg.type)
 		{
 		case ACMsgType::REQUESTON:
-			_requeston(
-				msg.body.at(U("RoomId")).as_integer(),
-				msg.body.at(U("CurrentRoomTemp")).as_double()
-			);
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("CurrentRoomTemp")))
+			{
+				_requeston(
+					msg.body.at(U("RoomId")).as_integer(),
+					msg.body.at(U("CurrentRoomTemp")).as_double()
+				);
+			}
 			break;
 		case ACMsgType::REQUESTOFF:
-			_requestoff(msg.body.at(U("RoomId")).as_integer());
+			if (msg.body.has_field(U("RoomId")))
+				_requestoff(msg.body.at(U("RoomId")).as_integer());
 			break;
 		case ACMsgType::SETTEMP:
-			_settemp(
-				msg.body.at(U("RoomId")).as_integer(),
-				msg.body.at(U("TargetTemp")).as_double()
-			);
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("TargetTemp")))
+			{
+				_settemp(
+					msg.body.at(U("RoomId")).as_integer(),
+					msg.body.at(U("TargetTemp")).as_double()
+				);
+			}
 			break;
 		case ACMsgType::SETFANSPEED:
-			_setfanspeed(
-				msg.body.at(U("RoomId")).as_integer(),
-				(Room::speed_t)msg.body.at(U("FanSpeed")).as_integer()
-			);
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("FanSpeed")))
+			{
+				_setfanspeed(
+					msg.body.at(U("RoomId")).as_integer(),
+					(Room::speed_t)msg.body.at(U("FanSpeed")).as_integer()
+				);
+			}
 			break;
 		case ACMsgType::TEMPNOTIFICATION:
-			_notify(
-				msg.body.at(U("RoomId")).as_integer(),
-				msg.body.at(U("CurrentRoomTemp")).as_double()
-			);
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("CurrentRoomTemp")))
+			{
+				_notify(
+					msg.body.at(U("RoomId")).as_integer(),
+					msg.body.at(U("CurrentRoomTemp")).as_double()
+				);
+			}
 			break;
 		default:
 			break;
