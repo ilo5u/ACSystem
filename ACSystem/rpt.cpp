@@ -12,10 +12,11 @@ void ACSystem::_rpt(const ACMessage& msg)
 		{
 			_fetchbill(
 				msg.body.at(U("RoomId")).as_integer(),
-				msg.body.at(U("DateIn")).as_integer(),
-				msg.body.at(U("DateOut")).as_integer()
+				(time_t)msg.body.at(U("DateIn")).as_double(),
+				(time_t)msg.body.at(U("DateOut")).as_double()
 			);
 		}
+
 		break;
 	case ACMsgType::FETCHINVOICE:
 		if (msg.body.has_field(U("RoomId"))
@@ -24,8 +25,8 @@ void ACSystem::_rpt(const ACMessage& msg)
 		{
 			_fetchinvoice(
 				msg.body.at(U("RoomId")).as_integer(),
-				msg.body.at(U("DateIn")).as_integer(),
-				msg.body.at(U("DateOut")).as_integer()
+				(time_t)msg.body.at(U("DateIn")).as_double(),
+				(time_t)msg.body.at(U("DateOut")).as_double()
 			);
 		}
 		break;
@@ -37,7 +38,7 @@ void ACSystem::_rpt(const ACMessage& msg)
 void ACSystem::_fetchbill(int64_t roomid, time_t din, time_t dout)
 {
 	wchar_t rid[0xF];
-	wsprintf(rid, U("%ld"), roomid);
+	std::swprintf(rid, U("%I64d"), roomid);
 
 	_usr.rpt.rquestcnt++;
 	_log.Log(_log.Time().append(U("Reception requests to check the bill of ")).append(rid).append(U(".")));
@@ -65,12 +66,12 @@ void ACSystem::_fetchbill(int64_t roomid, time_t din, time_t dout)
 void ACSystem::_fetchinvoice(int64_t roomid, time_t din, time_t dout)
 {
 	wchar_t rid[0xF];
-	wsprintf(rid, U("%ld"), roomid);
+	std::swprintf(rid, U("%I64d"), roomid);
 
 	_usr.rpt.rquestcnt++;
 	_log.Log(_log.Time().append(U("Reception requests to check the bill of ")).append(rid).append(U(".")));
 
-	_usr.rpt.latest = std::time(nullptr);
+ 	_usr.rpt.latest = std::time(nullptr);
 
 	json::value msg;
 	try

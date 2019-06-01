@@ -4,8 +4,7 @@
 ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64_t>& roomids) :
 	_com(com), _log(log), _usr(),
 	_capacity(0x3),
-	_slocker(), _acss(),
-	_wlocker(), _acws(),
+	_dlocker(), _acss(),  _acws(),
 	_onrunning(false), _mcontroller(),
 	_onstartup(false), _ccontroller()
 {
@@ -18,7 +17,7 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 		usr.rooms.push_back(new Room{ roomid, dbms });
 
 		wchar_t rid[0xF];
-		wsprintf(rid, L"%ld", roomid);
+		std::swprintf(rid, L"%I64d", roomid);
 		usr.rooms.back()->handler = com.CreateHandler(rid);
 	});
 
@@ -106,22 +105,22 @@ void ACSystem::_check()
 	try
 	{
 		_log.Log(_log.Time().append(U("Wait-Queue Monitor has been started correctly.")));
-		std::list<ACWObj*>::iterator readys;
-		std::list<ACSObj*>::iterator release;
+		std::list<ACWObj*>::iterator toservice;
+		std::list<ACSObj*>::iterator towait;
 
 		_onstartup = true;
 		while (_onstartup)
 		{
 			time_t rest = INT64_MAX;
 
-			_wlocker.lock();
+			_dlocker.lock();
 			bool valid = false;
 			for (auto obj = _acws.begin(); obj != _acws.end(); ++obj)
 			{
 				rest = std::min<time_t>(rest, (*obj)->duration);
 				if ((*obj)->duration == 0)
 				{
-					readys = obj;
+					toservice = obj;
 					valid = true;
 					break;
 				}
@@ -133,49 +132,43 @@ void ACSystem::_check()
 				time_t mindr = 0;
 				time_t dr = 0;
 
-				_slocker.lock();
 				for (auto obj = _acss.begin(); obj != _acss.end(); ++obj)
 				{
-					dr = (*obj)->GetDuration();
+					dr = (*obj)->duration;
 					if (dr > mindr)
 					{
 						mindr = dr;
-						release = obj;
+						towait = obj;
 					}
 				}
 
-				if (release != _acss.end())
+				if (towait != _acss.end())
 				{
-					Room& wait = (*release)->room;
-					delete *release;
-					*release = nullptr;
-					_acss.erase(release);
+					_acws.push_back(new ACWObj{ (*towait)->room, (*towait)->room.GetFanspeed(), 120 });
 
-					_wlocker.lock();
-					_acws.push_back(new ACWObj{ wait, wait.GetFanspeed(), 120 });
-					_wlocker.unlock();
-
-					wsprintf(rid, U("%ld"), wait.id);
+					std::swprintf(rid, U("%I64d"), (*towait)->room.id);
 					_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue.")));
+
+					delete *towait;
+					*towait = nullptr;
+					_acss.erase(towait);
 				}
 
-				Room& service = (*readys)->room;
-				Room::speed_t tfs = (*readys)->tfanspeed;
-				delete *readys;
-				*readys = nullptr;
-				_acws.erase(readys);
+				_acss.push_back(new ACSObj{ (*toservice)->room, (*toservice)->tfanspeed });
+				(*toservice)->room.SetFanspeed((*toservice)->tfanspeed, _usr.admin.frate[(*toservice)->tfanspeed]);
 
-				_acss.push_back(new ACSObj{ service, tfs });
-				service.SetFanspeed(tfs, _usr.admin.frate[tfs]);
-
-				wsprintf(rid, U("%ld"), service.id);
+				std::swprintf(rid, U("%I64d"), (*toservice)->room.id);
 				_log.Log(_log.Time().append(rid).append(U(" has been moved into Serivce-Queue.")));
-				_slocker.unlock();
+
+				delete *toservice;
+				*toservice = nullptr;
+				_acws.erase(toservice);
 			}
 
 			for (auto obj = _acws.begin(); obj != _acws.end(); ++obj)
 				(*obj)->duration -= rest;
-			_wlocker.unlock();
+
+			_dlocker.unlock();
 
 			std::this_thread::sleep_for(std::chrono::seconds(rest));
 		}

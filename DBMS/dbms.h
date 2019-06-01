@@ -28,6 +28,7 @@ public:
 	web::json::value Select(obj_t obj, int64_t roomid, time_t datein, time_t dateout);
 
 private:
+	std::mutex _protection;
 	void _insert(obj_t obj, web::json::value data);
 
 private:

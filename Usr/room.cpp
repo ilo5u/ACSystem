@@ -70,7 +70,7 @@ json::value Report::Load(time_t datein, time_t dateout)
 		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
 		{
 			onoff += (*elem).at(U("TimesOfOnOff")).as_integer();
-			duration += (*elem).at(U("Duration")).as_integer();
+			duration += (int64_t)((*elem).at(U("Duration")).as_double());
 			totalfee += (*elem).at(U("TotalFee")).as_double();
 			dptcount += (*elem).at(U("TimesOfDisptch")).as_integer();
 			rdrcount += (*elem).at(U("TimesOfRDR")).as_integer();
@@ -118,7 +118,7 @@ void Invoice::Store(opt_t opt, time_t response, int64_t fanspeed, double_t feera
 		json::value data;
 		data[U("roomid")] = json::value::number(_room->id);
 		data[U("rqtime")] = json::value::number(index->second);
-		data[U("duration")] = json::value::number(response - index->second);
+		data[U("rqduration")] = json::value::number(response - index->second);
 		data[U("fanspeed")] = json::value::number(fanspeed);
 		data[U("feerate")] = json::value::number(feerate);
 		data[U("totalfee")] = json::value::number(fee);
@@ -152,10 +152,20 @@ void Room::On(double_t ct)
 	_charging = std::move(std::thread{ std::bind(&Room::_on, this, ct) });
 }
 
-Room::speed_t Room::GetFanspeed()
+Room::speed_t Room::GetFanspeed(bool opt)
 {
 	speed_t fs{ speed_t::NLL };
-	if (std::fabs(ctemp - _ttemp) > 0.5)
+	if (!opt)
+	{
+		if (std::fabs(ctemp - _ttemp) > 0.5
+			&& state != Room::state_t::SUSPEND)
+		{
+			_flocker.lock();
+			fs = _fanspeed;
+			_flocker.unlock();
+		}
+	}
+	else
 	{
 		_flocker.lock();
 		fs = _fanspeed;
@@ -202,6 +212,7 @@ void Room::SetTargetTemp(double_t tt)
 
 void Room::Reset()
 {
+	inservice = false;
 	state = state_t::STOPPED;
 
 	if (_charging.joinable())
@@ -236,17 +247,16 @@ void Room::_on(double_t ct)
 	bool off = false;
 	while (!off)
 	{
-		std::this_thread::sleep_for(std::chrono::seconds{ 60 });
+		std::this_thread::sleep_for(std::chrono::seconds{ 6 });
 
 		duration++;
 		switch (state)
 		{
 		case Room::state_t::SERVICE:
-		case Room::state_t::SUSPEND:
 			if (std::fabs(ctemp - _ttemp) > 0.5)
 			{
 				_flocker.lock();
-				_totalfee += _feerate;
+				_totalfee += (_feerate / 10.0);
 				_flocker.unlock();
 			}
 			break;

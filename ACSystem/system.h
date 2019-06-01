@@ -4,9 +4,8 @@ class ACSObj
 {
 public:
 	ACSObj(Room& r, Room::speed_t fs) :
-		room(r), fanspeed(fs), timestamp(std::time(nullptr)),
-		_running(true), _sid(std::bind(&ACSObj::_service, this)), _dlocker(),
-		_duration(0)
+		room(r), fanspeed(fs), timestamp(std::time(nullptr)), duration(0),
+		_running(true), _sid(std::bind(&ACSObj::_service, this))
 	{
 		r.state = Room::state_t::SERVICE;
 		r.dptcount++;
@@ -29,16 +28,14 @@ public:
 	Room& room;
 	Room::speed_t fanspeed;
 	time_t timestamp;
+	std::atomic<time_t> duration;
 
 private:
 	std::atomic<bool> _running;
 	std::thread _sid;
-	std::mutex _dlocker;
-	time_t _duration;
 
 public:
 	void Serve(double_t ctemp) { room.On(ctemp); }
-	time_t GetDuration() { _dlocker.lock(); time_t dr = _duration; _dlocker.unlock(); return dr; }
 
 private:
 	void _service()
@@ -46,10 +43,7 @@ private:
 		while (_running)
 		{
 			std::this_thread::sleep_for(std::chrono::seconds(1));
-
-			_dlocker.lock();
-			_duration++;
-			_dlocker.unlock();
+			duration++;
 		}
 	}
 };
@@ -99,10 +93,9 @@ private:
 	ACUsr  _usr;
 
 	const int64_t _capacity;
-	std::mutex _slocker;
-	std::list<ACSObj*> _acss;
 
-	std::mutex _wlocker;
+	std::mutex _dlocker;
+	std::list<ACSObj*> _acss;
 	std::list<ACWObj*> _acws;
 
 	std::atomic<bool> _onrunning;

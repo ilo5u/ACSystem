@@ -26,9 +26,10 @@ void ACSystem::_admin(const ACMessage& msg)
 					mode = Room::mode_t::COOL;
 				_setparam(
 					mode,
-					msg.body.at(U("TempHighLimit")).as_double(),
-					msg.body.at(U("TempLowLimit")).as_double(),
-					msg.body.at(U("DefaultTargetTemp")).as_double(),
+					
+					(double_t)msg.body.at(U("TempHighLimit")).as_integer(),
+					(double_t)msg.body.at(U("TempLowLimit")).as_integer(),
+					(double_t)msg.body.at(U("DefaultTargetTemp")).as_integer(),
 					msg.body.at(U("FeeRateH")).as_double(),
 					msg.body.at(U("FeeRateM")).as_double(),
 					msg.body.at(U("FeeRateL")).as_double()
@@ -147,7 +148,7 @@ void ACSystem::_monitor(int64_t roomid)
 	_usr.admin.rquestcnt++;
 
 	wchar_t rid[0xF];
-	wsprintf(rid, U("%ld"), roomid);
+	std::swprintf(rid, U("%I64d"), roomid);
 
 	json::value msg;
 	std::list<Room*>::iterator room = _usr.rooms.end();
@@ -163,13 +164,13 @@ void ACSystem::_monitor(int64_t roomid)
 		});
 
 		time_t duration = 0;
-		_slocker.lock();
+		_dlocker.lock();
 		auto sobj = std::find_if(_acss.begin(), _acss.end(), [&room](const ACSObj* obj) {
 			return (*room)->id == obj->room.id;
 		});
 		if (sobj != _acss.end())
-			duration = (*sobj)->GetDuration();
-		_slocker.unlock();
+			duration = (*sobj)->duration;
+		_dlocker.unlock();
 		Room::state_t state = (*room)->state;
 		double_t ctemp = (*room)->ctemp;
 		double_t ttemp = (*room)->GetTargetTemp();

@@ -3,8 +3,8 @@
 
 ACLog::ACLog() :
 	_onlogging(false),
-	_maxn(0x2), _buffer(),
-	_flushout(), _onflushing(false)
+	_maxn(0x8), _buffer(),
+	_flushout(), _fcontroller()
 {
 }
 
@@ -23,11 +23,13 @@ void ACLog::Shutdown()
 
 	if (_buffer.size() > 0)
 	{
-		while (_onflushing);
+		if (_fcontroller.joinable())
+			_fcontroller.join();
+
 		std::swap(_buffer, _flushout);
 
-		_onflushing = true;
-		std::thread{ std::bind(&ACLog::_persistence, this) };
+		_fcontroller = std::move(std::thread{ std::bind(&ACLog::_persistence, this) });
+		_fcontroller.join();
 	}
 }
 
@@ -36,7 +38,7 @@ std::wstring ACLog::Time()
 	SYSTEMTIME st = { 0 };
 	GetLocalTime(&st);
 	WCHAR ct[0xFF];
-	wsprintf(ct, L"[%d-%02d-%02d %02d:%02d:%02d] ",
+	std::swprintf(ct, L"[%d-%02d-%02d %02d:%02d:%02d] ",
 		st.wYear,
 		st.wMonth,
 		st.wDay,
@@ -52,16 +54,19 @@ bool ACLog::Log(const std::wstring& info)
 	if (!_onlogging)
 		return false;
 
+	_blocker.lock();
 	_buffer.push_back(info);
 	if (_buffer.size() > _maxn)
 	{
-		while (_onflushing);
-		std::swap(_buffer, _flushout);
+		if (_fcontroller.joinable())
+			_fcontroller.join();
 
-		_onflushing = true;
-		std::thread flush{ std::bind(&ACLog::_persistence, this) };
-		flush.detach();
+		_flushout = _buffer;
+		_buffer.clear();
+
+		_fcontroller = std::move(std::thread{ std::bind(&ACLog::_persistence, this) });
 	}
+	_blocker.unlock();
 	return true;
 }
 
@@ -72,7 +77,7 @@ void ACLog::_persistence()
 
 	SYSTEMTIME st = { 0 };
 	GetLocalTime(&st);
-	wsprintf(filename, prefix.c_str(),
+	std::swprintf(filename, prefix.c_str(),
 		st.wYear,
 		st.wMonth,
 		st.wDay
@@ -80,13 +85,10 @@ void ACLog::_persistence()
 
 	std::wofstream logger(filename, std::wofstream::app | std::wofstream::out);
 
-	logger.sync_with_stdio(false);
 	std::for_each(_flushout.begin(), _flushout.end(), [&logger](const std::wstring& out) {
 		logger << out.c_str() << std::endl;
 	});
 	logger.flush();
 
 	_flushout.clear();
-
-	_onflushing = false;
 }

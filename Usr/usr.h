@@ -77,7 +77,8 @@ public:
 		INVALID,
 		SERVICE,
 		STOPPED,
-		SUSPEND
+		SUSPEND,
+		SLEEPED
 	};
 
 	enum class opt_t
@@ -143,7 +144,7 @@ public:
 	void On(double_t ct);
 
 public:
-	speed_t GetFanspeed();
+	speed_t GetFanspeed(bool opt = false);
 	double_t GetTargetTemp();
 	double_t GetTotalfee();
 
@@ -181,7 +182,13 @@ struct Admin :
 	Room::speed_t deffanspeed{ Room::speed_t::LOW };
 	double_t htemp{ 30.0 };
 	double_t ltemp{ 18.0 };
-	std::map<Room::speed_t, double_t> frate;
+	std::map<Room::speed_t, double_t> frate
+	{ 
+		{Room::speed_t::NLL, 0.0},
+		{Room::speed_t::LOW, 0.5},
+		{Room::speed_t::MID, 1.0},
+		{Room::speed_t::HGH, 1.5}
+	};
 
 	state_t state{ state_t::READY };
 	opt_t opt{ opt_t::IDLE };

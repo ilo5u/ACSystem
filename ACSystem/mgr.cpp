@@ -13,7 +13,7 @@ void ACSystem::_mgr(const ACMessage& msg)
 			_fetchreport(
 				msg.body.at(U("RoomId")).as_integer(),
 				(Mgr::rtype_t)msg.body.at(U("TypeReport")).as_integer(),
-				msg.body.at(U("DateIn")).as_integer()
+				(int64_t)msg.body.at(U("DateIn")).as_double()
 			);
 		}
 		break;
@@ -25,7 +25,7 @@ void ACSystem::_mgr(const ACMessage& msg)
 void ACSystem::_fetchreport(int64_t roomid, Mgr::rtype_t rt, time_t head)
 {
 	wchar_t rid[0xF];
-	wsprintf(rid, U("%ld"), roomid);
+	std::swprintf(rid, U("%I64d"), roomid);
 
 	_usr.mgr.rquestcnt++;
 	_log.Log(_log.Time().append(U("Manager requests to check reports of ")).append(rid).append(U(".")));

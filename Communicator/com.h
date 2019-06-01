@@ -32,8 +32,6 @@ struct ACMessage
 	ACMsgType type;
 	json::value body;
 	
-	//std::map<utility::string_t, utility::string_t> info;
-
 	ACMessage() :
 		token(0), type(ACMsgType::INVALID), body()
 	{
@@ -50,6 +48,14 @@ class ACCom
 {
 public:
 	typedef typename int64_t Handler;
+
+	enum class method_t
+	{
+		GET,
+		POST,
+		PUT,
+		DEL
+	};
 
 public:
 	ACCom(const std::wstring& address);
@@ -72,7 +78,7 @@ public:
 
 private:
 	typedef utility::string_t Token, * LPToken;
-	typedef std::vector<std::pair<LPToken, std::list<http_request>>> TokenIndics;
+	typedef std::vector<std::pair<LPToken, std::map<method_t, std::list<http_request>>>> TokenIndics;
 	TokenIndics _tokens;
 	std::mutex _tlocker;
 
@@ -87,7 +93,7 @@ private:
 		}
 	} conv;
 
-	int64_t _fetch(const Token& token, http_request& message);
+	int64_t _fetch(const Token& token, method_t method, http_request& message);
 
 private:
 	http_listener * _listener;

@@ -11,10 +11,12 @@
 
 
 ACCom::ACCom(const std::wstring& address) :
-	_tokens(), _listener(nullptr),
+	_tokens(), _tlocker(),
+	_listener(nullptr),
 	_pulls(), _pulllocker(),
 	_pushs(), _pushlocker(),
-	_running(false), _replycontroller(), _pushsemophare(nullptr)
+	_running(false), _replycontroller(),
+	_pullsemophare(NULL), _pushsemophare(NULL)
 {
 	uri_builder uri(address);
 	_listener = new http_listener(uri.to_uri().to_string());
@@ -56,7 +58,7 @@ ACCom::~ACCom()
 	_listener = nullptr;
 
 	std::for_each(
-		_tokens.begin(), _tokens.end(), [](std::pair<LPToken, std::list<http_request>>& cur) {
+		_tokens.begin(), _tokens.end(), [](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 		delete cur.first;
 		cur.first = nullptr;
 	});
@@ -65,7 +67,7 @@ ACCom::~ACCom()
 ACCom::Handler ACCom::CreateHandler(const std::wstring& token)
 {
 	TokenIndics::const_iterator exist = std::find_if(
-		_tokens.begin(), _tokens.end(), [&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+		_tokens.begin(), _tokens.end(), [&token](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 		return token == *(cur.first);
 	});
 
@@ -73,7 +75,7 @@ ACCom::Handler ACCom::CreateHandler(const std::wstring& token)
 	{
 		_tokens.push_back({ new Token{ token }, {} });
 		exist = std::find_if(
-			_tokens.begin(), _tokens.end(), [&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+			_tokens.begin(), _tokens.end(), [&token](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 			return token == *(cur.first);
 		});
 	}
@@ -119,17 +121,17 @@ pplx::task<void> ACCom::Shutdown()
 	return _listener->close();
 }
 
-int64_t ACCom::_fetch(const Token& token, http_request& message)
+int64_t ACCom::_fetch(const Token& token, method_t method, http_request& message)
 {
 	_tlocker.lock();
 	auto sender = std::find_if(_tokens.begin(), _tokens.end(),
-		[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+		[&token](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 		return (*cur.first).compare(token) == 0;
 	});
 	if (sender != _tokens.end())
 	{
 		int64_t handler = conv((int64_t)(*sender).first);
-		(*sender).second.push_back(std::move(message));
+		((*sender).second)[method].push_back(std::move(message));
 		_tlocker.unlock();
 
 		return handler;
@@ -144,27 +146,28 @@ void ACCom::_handle_get(http_request message)
 {
 	try
 	{
+		auto queries = http::uri::split_query(message.relative_uri().query());
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
 		if (paths[0].compare(U("api")) == 0)
 		{
-			if (paths[1].compare(U("power")))
+			if (paths[1].compare(U("power")) == 0)
 			{
-				int64_t handler = _fetch(U("Admin"), message);
+				int64_t handler = _fetch(U("Admin"), method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::STARTUP, body });
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
 			}
-			else if (paths[1].compare(U("state")))
+			else if (paths[1].compare(U("state")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(U("Admin"), message);
+				int64_t handler = _fetch(U("Admin"), method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::MONITOR, body });
@@ -174,10 +177,10 @@ void ACCom::_handle_get(http_request message)
 			else if (paths[1].compare(U("ac")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(paths[2], message);
+				int64_t handler = _fetch(paths[2], method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHFEE, body });
@@ -187,10 +190,15 @@ void ACCom::_handle_get(http_request message)
 			else if (paths[1].compare(U("detail")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(U("Reception"), message);
+				if (queries.find(U("DateIn")) != queries.end())
+					body[U("DateIn")] = json::value::number(_wtoi64(queries.at(U("DateIn")).c_str()));
+				if (queries.find(U("DateOut")) != queries.end())
+					body[U("DateOut")] = json::value::number(_wtoi64(queries.at(U("DateOut")).c_str()));
+
+				int64_t handler = _fetch(U("Reception"), method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHINVOICE, body });
@@ -200,10 +208,15 @@ void ACCom::_handle_get(http_request message)
 			else if (paths[1].compare(U("bill")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(U("Reception"), message);
+				if (queries.find(U("DateIn")) != queries.end())
+					body[U("DateIn")] = json::value::number(_wtoi64(queries.at(U("DateIn")).c_str()));
+				if (queries.find(U("DateOut")) != queries.end())
+					body[U("DateOut")] = json::value::number(_wtoi64(queries.at(U("DateOut")).c_str()));
+
+				int64_t handler = _fetch(U("Reception"), method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHBILL, body });
@@ -213,18 +226,18 @@ void ACCom::_handle_get(http_request message)
 			else if (paths[1].compare(U("report")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
 				int64_t type = 0;
-				swscanf(paths[3].c_str(), U("%I64d"), &type);
+				std::swscanf(paths[3].c_str(), U("%I64d"), &type);
 				body[U("TypeReport")] = json::value::number(type);
 
 				int64_t datein = 0;
-				swscanf(paths[4].c_str(), U("%I64d"), &datein);
+				std::swscanf(paths[4].c_str(), U("%I64d"), &datein);
 				body[U("DateIn")] = json::value::number(datein);
 
-				int64_t handler = _fetch(U("Manager"), message);
+				int64_t handler = _fetch(U("Manager"), method_t::GET, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHREPORT, body });
@@ -234,12 +247,12 @@ void ACCom::_handle_get(http_request message)
 			}
 			else
 			{
-				message.reply(status_codes::BadRequest);
+				// message.reply(status_codes::BadRequest);
 			}
 		}
 		else
 		{
-			message.reply(status_codes::BadRequest);
+			// message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
@@ -258,6 +271,7 @@ void ACCom::_handle_put(http_request message)
 {
 	try
 	{
+		auto queries = http::uri::split_query(message.relative_uri().query());
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
@@ -268,10 +282,13 @@ void ACCom::_handle_put(http_request message)
 				if (paths[2].compare(U("notify")) == 0)
 				{
 					int64_t rid = 0;
-					swscanf(paths[3].c_str(), U("%I64d"), &rid);
+					std::swscanf(paths[3].c_str(), U("%I64d"), &rid);
 					body[U("RoomId")] = json::value::number(rid);
 
-					int64_t handler = _fetch(paths[3], message);
+					if (queries.find(U("CurrentRoomTemp")) != queries.end())
+						body[U("CurrentRoomTemp")] = json::value::number(_wtof(queries.at(U("CurrentRoomTemp")).c_str()));
+
+					int64_t handler = _fetch(paths[3], method_t::PUT, message);
 
 					_pulllocker.lock();
 					_pulls.push(ACMessage{ handler, ACMsgType::TEMPNOTIFICATION, body });
@@ -281,10 +298,10 @@ void ACCom::_handle_put(http_request message)
 				else
 				{
 					int64_t rid = 0;
-					swscanf(paths[2].c_str(), U("%I64d"), &rid);
+					std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 					body[U("RoomId")] = json::value::number(rid);
 
-					int64_t handler = _fetch(paths[2], message);
+					int64_t handler = _fetch(paths[2], method_t::PUT, message);
 
 					_pulllocker.lock();
 					_pulls.push(ACMessage{ handler, ACMsgType::REQUESTON, body });
@@ -294,7 +311,7 @@ void ACCom::_handle_put(http_request message)
 			}
 			else if (paths[1].compare(U("power")) == 0)
 			{
-				int64_t handler = _fetch(U("Admin"), message);
+				int64_t handler = _fetch(U("Admin"), method_t::PUT, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::POWERON, body });
@@ -302,12 +319,12 @@ void ACCom::_handle_put(http_request message)
 				_pulllocker.unlock();
 			}
 			{
-				message.reply(status_codes::BadRequest);
+				// message.reply(status_codes::BadRequest);
 			}
 		}
 		else
 		{
-			message.reply(status_codes::BadRequest);
+			// message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
@@ -325,6 +342,7 @@ void ACCom::_handle_post(http_request message)
 {
 	try
 	{
+		auto queries = http::uri::split_query(message.relative_uri().query());
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
@@ -332,7 +350,28 @@ void ACCom::_handle_post(http_request message)
 		{
 			if (paths[1].compare(U("power")) == 0)
 			{
-				int64_t handler = _fetch(U("Admin"), message);
+				int64_t handler = _fetch(U("Admin"), method_t::POST, message);
+
+				if (queries.find(U("Mode")) != queries.end())
+					body[U("Mode")] = json::value::string(queries.at(U("Mode")));
+
+				if (queries.find(U("TempHighLimit")) != queries.end())
+					body[U("TempHighLimit")] = json::value::number(_wtoi64(queries.at(U("TempHighLimit")).c_str()));
+				
+				if (queries.find(U("TempLowLimit")) != queries.end())
+					body[U("TempLowLimit")] = json::value::number(_wtoi64(queries.at(U("TempLowLimit")).c_str()));
+				
+				if (queries.find(U("DefaultTargetTemp")) != queries.end())
+					body[U("DefaultTargetTemp")] = json::value::number(_wtoi64(queries.at(U("DefaultTargetTemp")).c_str()));
+				
+				if (queries.find(U("FeeRateH")) != queries.end())
+					body[U("FeeRateH")] = json::value::number(_wtof(queries.at(U("FeeRateH")).c_str()));
+
+				if (queries.find(U("FeeRateM")) != queries.end())
+					body[U("FeeRateM")] = json::value::number(_wtof(queries.at(U("FeeRateM")).c_str()));
+
+				if (queries.find(U("FeeRateL")) != queries.end())
+					body[U("FeeRateL")] = json::value::number(_wtof(queries.at(U("FeeRateL")).c_str()));
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::SETPARAM, body });
@@ -342,10 +381,15 @@ void ACCom::_handle_post(http_request message)
 			else if (paths[1].compare(U("ac")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(paths[2], message);
+				if (queries.find(U("TargetTemp")) != queries.end())
+					body[U("TargetTemp")] = json::value::number(_wtoi64(queries.at(U("TargetTemp")).c_str()));
+				else if (queries.find(U("FanSpeed")) != queries.end())
+					body[U("FanSpeed")] = json::value::number(_wtof(queries.at(U("FanSpeed")).c_str()));
+
+				int64_t handler = _fetch(paths[2], method_t::POST, message);
 				if (body.has_field(U("TargetTemp")))
 				{
 					_pulllocker.lock();
@@ -361,17 +405,17 @@ void ACCom::_handle_post(http_request message)
 					_pulllocker.unlock();
 				}
 				{
-					message.reply(status_codes::BadRequest);
+					// message.reply(status_codes::BadRequest);
 				}
 			}
 			else
 			{
-				message.reply(status_codes::BadRequest);
+				// message.reply(status_codes::BadRequest);
 			}
 		}
 		else
 		{
-			message.reply(status_codes::BadRequest);
+			// message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
@@ -389,6 +433,7 @@ void ACCom::_handle_delete(http_request message)
 {
 	try
 	{
+		auto queries = http::uri::split_query(message.relative_uri().query());
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
@@ -396,7 +441,7 @@ void ACCom::_handle_delete(http_request message)
 		{
 			if (paths[1].compare(U("power")) == 0)
 			{
-				int64_t handler = _fetch(U("Admin"), message);
+				int64_t handler = _fetch(U("Admin"), method_t::DEL, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::SHUTDOWN, body });
@@ -406,10 +451,10 @@ void ACCom::_handle_delete(http_request message)
 			else if (paths[1].compare(U("ac")) == 0)
 			{
 				int64_t rid = 0;
-				swscanf(paths[2].c_str(), U("%I64d"), &rid);
+				std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
 				body[U("RoomId")] = json::value::number(rid);
 
-				int64_t handler = _fetch(paths[2], message);
+				int64_t handler = _fetch(paths[2], method_t::DEL, message);
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::REQUESTOFF, body });
@@ -418,12 +463,12 @@ void ACCom::_handle_delete(http_request message)
 			}
 			else
 			{
-				message.reply(status_codes::BadRequest);
+				// message.reply(status_codes::BadRequest);
 			}
 		}
 		else
 		{
-			message.reply(status_codes::BadRequest);
+			// message.reply(status_codes::BadRequest);
 		}
 	}
 	catch (...)
@@ -460,29 +505,76 @@ void ACCom::_reply()
 				LPToken token = (LPToken)conv(out.token);
 				_tlocker.lock();
 				auto recver = std::find_if(_tokens.begin(), _tokens.end(),
-					[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+					[&token](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 					return cur.first == token;
 				});
 
-				http_request rep = std::move((*recver).second.front());
-				(*recver).second.erase((*recver).second.begin());
-				_tlocker.unlock();
-
-				rep.reply(status_codes::OK, out.body)
-					.then([](pplx::task<void> t)
+				method_t method;
+				switch (out.type)
 				{
-					try {
-						t.get();
-					}
-					catch (...) {
-						//
-					}
-				});
+				case ACMsgType::REQUESTON:
+				case ACMsgType::POWERON:
+				case ACMsgType::TEMPNOTIFICATION:
+					method = method_t::PUT;
+					break;
 
+				case ACMsgType::SETTEMP:
+				case ACMsgType::SETFANSPEED:
+				case ACMsgType::SETPARAM:
+					method = method_t::POST;
+					break;
+
+				case ACMsgType::REQUESTOFF:
+				case ACMsgType::SHUTDOWN:
+					method = method_t::DEL;
+					break;
+
+				case ACMsgType::STARTUP:
+				case ACMsgType::FETCHFEE:
+				case ACMsgType::FETCHINVOICE:
+				case ACMsgType::FETCHREPORT:
+				case ACMsgType::FETCHBILL:
+				case ACMsgType::MONITOR:
+					method = method_t::GET;
+					break;
+
+				default:
+					break;
+				}
+
+				if (((*recver).second).find(method) != (*recver).second.end())
+				{
+					http_request rep = std::move(((*recver).second)[method].front());
+					((*recver).second)[method].pop_front();
+					_tlocker.unlock();
+
+					http_response msg;
+					msg.headers().add(U("Access-Control-Allow-Origin"), U("*"));
+					msg.headers().add(U("Access-Control-Request-Method"), U("GET,POST,OPTIONS"));
+					msg.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
+					msg.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
+					msg.set_status_code(status_codes::OK);
+					msg.set_body(out.body);
+					rep.reply(msg)
+						//rep.reply(status_codes::OK, out.body)
+						.then([](pplx::task<void> t)
+					{
+						try {
+							t.get();
+						}
+						catch (...) {
+							//
+						}
+					});
+				}
+				else
+				{
+					_tlocker.unlock();
+				}
 			}
 			catch (...)
 			{
-				_tlocker.unlock();
+				_replycontroller = std::move(std::thread{ std::bind(&ACCom::_reply, this) });
 			}
 		}
 	}
