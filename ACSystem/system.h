@@ -82,13 +82,16 @@ public:
 class ACSystem
 {
 public:
-	ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::initializer_list<int64_t>& roomids);
+	ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64_t>& roomids);
 	~ACSystem();
 
 	ACSystem(const ACSystem&) = delete;
 	ACSystem(ACSystem&&) = delete;
 	ACSystem& operator=(const ACSystem&) = delete;
 	ACSystem& operator=(ACSystem&&) = delete;
+
+public:
+	void Wait();
 
 private:
 	ACCom& _com;
@@ -102,6 +105,7 @@ private:
 	std::mutex _wlocker;
 	std::list<ACWObj*> _acws;
 
+	std::atomic<bool> _onrunning;
 	std::thread _mcontroller;
 	void _master();
 

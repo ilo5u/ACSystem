@@ -3,7 +3,7 @@
 
 ACLog::ACLog() :
 	_onlogging(false),
-	_maxn(0x20), _buffer(),
+	_maxn(0x2), _buffer(),
 	_flushout(), _onflushing(false)
 {
 }
@@ -65,18 +65,20 @@ bool ACLog::Log(const std::wstring& info)
 	return true;
 }
 
-static const std::wstring prefix = L"record_%d.log";
+static const std::wstring prefix = L"%d-%d-%d.log";
 void ACLog::_persistence()
 {
 	wchar_t filename[MAX_PATH];
-	std::wofstream logger;
 
-	int seq = 0;
-	do
-	{
-		wsprintf(filename, prefix.c_str(), ++seq);
-		logger.open(filename, std::wofstream::app);
-	} while (!logger);
+	SYSTEMTIME st = { 0 };
+	GetLocalTime(&st);
+	wsprintf(filename, prefix.c_str(),
+		st.wYear,
+		st.wMonth,
+		st.wDay
+	);
+
+	std::wofstream logger(filename, std::wofstream::app | std::wofstream::out);
 
 	logger.sync_with_stdio(false);
 	std::for_each(_flushout.begin(), _flushout.end(), [&logger](const std::wstring& out) {

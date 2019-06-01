@@ -37,8 +37,8 @@ ACCom::ACCom(const std::wstring& address) :
 			std::bind(&ACCom::_handle_delete, this, std::placeholders::_1)
 		);
 
-		_pullsemophare = CreateSemaphore(NULL, 0, 0xFF, NULL);
-		_pushsemophare = CreateSemaphore(NULL, 0, 0xFF, NULL);
+		_pullsemophare = CreateSemaphore(NULL, 0, 0x80, NULL);
+		_pushsemophare = CreateSemaphore(NULL, 0, 0x80, NULL);
 	}
 }
 
@@ -47,6 +47,7 @@ ACCom::~ACCom()
 	CloseHandle(_pushsemophare);
 	CloseHandle(_pullsemophare);
 
+	_running = false;
 	if (_replycontroller.joinable())
 		_replycontroller.join();
 
@@ -94,7 +95,7 @@ bool ACCom::PushMessage(const ACMessage& message)
 ACMessage ACCom::PullMessage()
 {
 	ACMessage in{ 0, ACMsgType::INVALID, {} };
-	WaitForSingleObject(_pullsemophare, 1000);
+	WaitForSingleObject(_pullsemophare, 2000);
 
 	_pulllocker.lock();
 	if (!_pulls.empty())
@@ -141,10 +142,11 @@ int64_t ACCom::_fetch(const Token& token, http_request& message)
 
 void ACCom::_handle_get(http_request message)
 {
-	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
-	json::value body = message.extract_json().get();
 	try
 	{
+		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+		json::value body = message.extract_json().get();
+
 		if (paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("power")))
@@ -246,10 +248,11 @@ void ACCom::_handle_get(http_request message)
 
 void ACCom::_handle_put(http_request message)
 {
-	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
-	json::value body = message.extract_json().get();
 	try
 	{
+		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+		json::value body = message.extract_json().get();
+
 		if (paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("ac")) == 0)
@@ -305,10 +308,11 @@ void ACCom::_handle_put(http_request message)
 
 void ACCom::_handle_post(http_request message)
 {
-	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
-	json::value body = message.extract_json().get();
 	try
 	{
+		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+		json::value body = message.extract_json().get();
+
 		if (paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("power")) == 0)
@@ -358,10 +362,11 @@ void ACCom::_handle_post(http_request message)
 
 void ACCom::_handle_delete(http_request message)
 {
-	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
-	json::value body = message.extract_json().get();
 	try
 	{
+		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+		json::value body = message.extract_json().get();
+
 		if (paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("power")) == 0)
@@ -405,7 +410,7 @@ void ACCom::_reply()
 	while (_running)
 	{
 		out.type = ACMsgType::INVALID;
-		WaitForSingleObject(_pushsemophare, 1000);
+		WaitForSingleObject(_pushsemophare, 2000);
 		
 		_pushlocker.lock();
 		if (!_pushs.empty())
@@ -417,14 +422,15 @@ void ACCom::_reply()
 
 		if (out.type != ACMsgType::INVALID)
 		{
-			LPToken token = (LPToken)conv(out.token);
-			_tlocker.lock();
-			auto recver = std::find_if(_tokens.begin(), _tokens.end(),
-				[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
-				return cur.first == token;
-			});
 			try
 			{
+				LPToken token = (LPToken)conv(out.token);
+				_tlocker.lock();
+				auto recver = std::find_if(_tokens.begin(), _tokens.end(),
+					[&token](const std::pair<LPToken, std::list<http_request>>& cur) {
+					return cur.first == token;
+				});
+
 				http_request rep = std::move((*recver).second.front());
 				(*recver).second.erase((*recver).second.begin());
 				_tlocker.unlock();

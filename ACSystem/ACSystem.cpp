@@ -12,17 +12,49 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
+	std::wfstream fin;
+	fin.open(U("ip.cfg"));
+	if (!fin)
+		return 1;
+
+	std::wstring address;
+	fin >> address;
+	fin.close();
+
+	fin.open(U("roomid.cfg"));
+	if (!fin)
+		return 2;
+	int64_t roomid;
+	std::vector<int64_t> roomids;
+	while (!fin.eof())
+	{
+		fin >> roomid;
+		roomids.push_back(roomid);
+	}
+	fin.close();
+
 	ACLog aclogger;
 	aclogger.Start();
 
-	std::wstring address = L"http://10.201.6.248:8080";
-	ACCom accom(address);
-	accom.Start().wait();
+	try
+	{
+		ACCom accom(address);
+		accom.Start().wait();
 
-	ACDbms acdbms;
-	acdbms.Connect();
+		ACDbms acdbms;
+		bool ret = acdbms.Connect();
+		if (!ret)
+			return 3;
 
-	ACSystem acsystem{ accom, aclogger, acdbms, {201, 202, 203, 204} };
+		ACSystem acsystem{ accom, aclogger, acdbms, roomids };
+		acsystem.Wait();
+
+		return 0;
+	}
+	catch (...)
+	{
+		return 4;
+	}
 }
 
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单

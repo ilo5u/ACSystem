@@ -23,11 +23,11 @@ bool ACDbms::Connect()
 		{
 			ret = SQLConnect(
 				_con,
-				(SQLWCHAR*)"ACSystem", // 数据源
+				(SQLWCHAR*)U("ACSystem"), // 数据源
 				SQL_NTS,
-				(SQLWCHAR*)"sa", // 用户名
+				(SQLWCHAR*)U("sa"), // 用户名
 				SQL_NTS,
-				(SQLWCHAR*)"19981031", // 密码
+				(SQLWCHAR*)U("19981031"), // 密码
 				SQL_NTS
 			);
 
