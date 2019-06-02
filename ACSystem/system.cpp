@@ -4,9 +4,10 @@
 ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64_t>& roomids) :
 	_com(com), _log(log), _usr(),
 	_capacity(0x3),
-	_dlocker(), _acss(),  _acws(),
+	_dlocker(), _acss(),  _acws(),  _watcher(),
 	_onrunning(false), _mcontroller(),
-	_onstartup(false), _ccontroller()
+	_onstartup(false), _ccontroller(),
+	_acontroller()
 {
 	_usr.admin.handler = _com.CreateHandler(L"Admin");
 	_usr.mgr.handler = _com.CreateHandler(L"Manager");
@@ -21,6 +22,7 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 		usr.rooms.back()->handler = com.CreateHandler(rid);
 	});
 
+	_onrunning = true;
 	_mcontroller = std::move(std::thread{ std::bind(&ACSystem::_master, this) });
 	_log.Log(_log.Time().append(U("System has been started.")));
 }
@@ -30,6 +32,9 @@ ACSystem::~ACSystem()
 	_onstartup = false;
 	if (_ccontroller.joinable())
 		_ccontroller.join();
+
+	if (_acontroller.joinable())
+		_acontroller.join();
 
 	_onrunning = false;
 	if (_mcontroller.joinable())
@@ -47,11 +52,10 @@ void ACSystem::Wait()
 void ACSystem::_master()
 {
 	ACMessage msg;
-	try
-	{
+	//try
+	//{
 		_log.Log(_log.Time().append(U("System has been started correctly.")));
 
-		_onrunning = true;
 		while (_onrunning)
 		{
 			msg = _com.PullMessage();
@@ -88,27 +92,26 @@ void ACSystem::_master()
 			}
 		}
 		_log.Log(_log.Time().append(U("System has been stopped correctly.")));
-	}
-	catch (...)
-	{
-		_log.Log(_log.Time().append(U("System has been stopped incorrectly.")));
+	//}
+	//catch (...)
+	//{
+	//	_log.Log(_log.Time().append(U("System has been stopped incorrectly.")));
 
-		_mcontroller.detach();
-		_mcontroller = std::move(std::thread{ std::bind(&ACSystem::_master, this) });
+	//	_mcontroller.detach();
+	//	_onrunning = true;
+	//	_mcontroller = std::move(std::thread{ std::bind(&ACSystem::_master, this) });
 
-		_log.Log(_log.Time().append(U("System has been restarted automatically.")));
-	}
+	//	_log.Log(_log.Time().append(U("System has been restarted automatically.")));
+	//}
 }
 
 void ACSystem::_check()
 {
-	try
-	{
+	//try
+	//{
 		_log.Log(_log.Time().append(U("Wait-Queue Monitor has been started correctly.")));
 		std::list<ACWObj*>::iterator toservice;
 		std::list<ACSObj*>::iterator towait;
-
-		_onstartup = true;
 		while (_onstartup)
 		{
 			time_t rest = INT64_MAX;
@@ -166,23 +169,82 @@ void ACSystem::_check()
 				_acws.erase(toservice);
 			}
 
-			for (auto obj = _acws.begin(); obj != _acws.end(); ++obj)
-				(*obj)->duration -= rest;
-
+			if (rest != INT64_MAX)
+			{
+				for (auto obj = _acws.begin(); obj != _acws.end(); ++obj)
+				{
+					if ((*obj)->duration != INT64_MAX)
+					{
+						(*obj)->duration -= rest;
+					}
+				}
+			}
 			_dlocker.unlock();
 
-			std::this_thread::sleep_for(std::chrono::seconds(rest));
+			if (rest != INT64_MAX)
+			{
+				std::this_thread::sleep_for(std::chrono::seconds(rest));
+			}
+			else
+			{
+				std::this_thread::sleep_for(std::chrono::seconds(1));
+			}
 		}
 		_log.Log(_log.Time().append(U("Wait-Queue Monitor has been stopped correctly.")));
-	}
-	catch (...)
+	//}
+	//catch (...)
+	//{
+	//	_log.Log(_log.Time().append(U("Wait-Queue Monitor has been stopped incorrectly.")));
+
+	//	_ccontroller.detach();
+	//	_onstartup = true;
+	//	_ccontroller = std::move(std::thread{ std::bind(&ACSystem::_check, this) });
+
+	//	_log.Log(_log.Time().append(U("Wait-Queue Monitor has been restarted automatically.")));
+	//}
+}
+
+void ACSystem::_alive()
+{
+	while (_onstartup)
 	{
-		_log.Log(_log.Time().append(U("Wait-Queue Monitor has been stopped incorrectly.")));
+		_dlocker.lock();
+		for (auto elem : _watcher)
+		{
+			if (elem.second == false)
+			{
+				auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&elem](const Room* cur) {
+					return elem.first == cur->id;
+				});
+				if (room != _usr.rooms.end())
+				{
+					auto sobj = std::find_if(_acss.begin(), _acss.end(), [&elem](const ACSObj* obj) {
+						return elem.first == obj->room.id;
+					});
+					if (sobj != _acss.end())
+					{
+						delete *sobj;
+						*sobj = nullptr;
+						_acss.erase(sobj);
+					}
 
-		_ccontroller.detach();
-		_ccontroller = std::move(std::thread{ std::bind(&ACSystem::_check, this) });
+					auto wobj = std::find_if(_acws.begin(), _acws.end(), [&elem](const ACWObj* obj) {
+						return elem.first == obj->room.id;
+					});
+					if (wobj != _acws.end())
+					{
+						delete *wobj;
+						*wobj = nullptr;
+						_acws.erase(wobj);
+					}
 
-		_log.Log(_log.Time().append(U("Wait-Queue Monitor has been restarted automatically.")));
+					(*room)->Reset(true);
+				}
+			}
+			elem.second = false;
+		}
+		_dlocker.unlock();
+
+		std::this_thread::sleep_for(std::chrono::seconds(6));
 	}
-
 }

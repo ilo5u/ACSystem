@@ -6,8 +6,8 @@ struct UBase
 
 	time_t latest{ 0 };
 	time_t period{ 0 };
-	int64_t rquestcnt{ 0 };
-	int64_t rponsecnt{ 0 };
+	//int64_t rquestcnt{ 0 };
+	//int64_t rponsecnt{ 0 };
 	bool inservice{ false };
 };
 
@@ -59,6 +59,7 @@ public:
 	void Prepare(opt_t opt, time_t request);
 	void Store(opt_t opt, time_t response, int64_t fanspeed, double_t feerate, double_t fee);
 	json::value Load(time_t datein, time_t dateout);
+	void Clear();
 
 private:
 	std::mutex _plocker;
@@ -116,7 +117,7 @@ public:
 	opt_t opt{ opt_t::IDLE };
 
 	mode_t mode{ mode_t::COOL };
-	std::atomic<double_t> ctemp{ 26.0 };
+	std::atomic<double_t> ctemp{ 0.0 };
 
 	std::atomic<state_t> state{ state_t::STOPPED };
 	std::atomic<time_t> ontime{ 0 };
@@ -132,9 +133,9 @@ public:
 	Report report;
 
 private:
-	std::atomic<double_t> _ttemp{ 28.0 };
+	std::atomic<double_t> _ttemp{ 26.0 };
 	speed_t _fanspeed{ speed_t::LOW };
-	double_t _feerate{ 1.5 };
+	double_t _feerate{ 5.0 };
 	double_t _totalfee{ 0.0 };
 
 	std::thread _charging;
@@ -151,7 +152,7 @@ public:
 public:
 	void SetFanspeed(speed_t fs, double_t fr);
 	void SetTargetTemp(double_t tt);
-	void Reset();
+	void Reset(bool opt = false);
 
 private:
 	void _on(double_t ct);
@@ -178,16 +179,16 @@ struct Admin :
 	};
 
 	Room::mode_t defmode{ Room::mode_t::COOL };
-	double_t deftemp{ 26.0 };
+	double_t deftemp{ 28.0 };
 	Room::speed_t deffanspeed{ Room::speed_t::LOW };
-	double_t htemp{ 30.0 };
-	double_t ltemp{ 18.0 };
+	double_t htemp{ 31.0 };
+	double_t ltemp{ 16.0 };
 	std::map<Room::speed_t, double_t> frate
 	{ 
 		{Room::speed_t::NLL, 0.0},
-		{Room::speed_t::LOW, 0.5},
-		{Room::speed_t::MID, 1.0},
-		{Room::speed_t::HGH, 1.5}
+		{Room::speed_t::LOW, 5.0},
+		{Room::speed_t::MID, 10.0},
+		{Room::speed_t::HGH, 15.0}
 	};
 
 	state_t state{ state_t::OFF };

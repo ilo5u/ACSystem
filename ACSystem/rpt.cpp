@@ -39,53 +39,57 @@ void ACSystem::_fetchbill(int64_t roomid, time_t din, time_t dout)
 {
 	wchar_t rid[0xF];
 	std::swprintf(rid, U("%I64d"), roomid);
-
-	_usr.rpt.rquestcnt++;
 	_log.Log(_log.Time().append(U("Reception requests to check the bill of ")).append(rid).append(U(".")));
 
+	_dlocker.lock();
+	int64_t handler = _usr.rpt.handler;
 	_usr.rpt.latest = std::time(nullptr);
-
 	json::value msg;
-	try
-	{
+	//try
+	//{
 		auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
 			return cur->id == roomid;
 		});
-		msg = (*room)->bill.Load(din, dout);
-		(*room)->rdrcount++;
-	}
-	catch (...)
-	{
-		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
-	}
+		if (room != _usr.rooms.end())
+		{
+			msg = (*room)->bill.Load(din, dout);
+			(*room)->rdrcount++;
+		}
+	//}
+	//catch (...)
+	//{
+	//	_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
+	//}
+	_dlocker.unlock();
 
-	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHBILL, msg });
-	_usr.rpt.rponsecnt++;
+	_com.PushMessage(ACMessage{ handler, ACMsgType::FETCHBILL, msg });
 }
 
 void ACSystem::_fetchinvoice(int64_t roomid, time_t din, time_t dout)
 {
 	wchar_t rid[0xF];
 	std::swprintf(rid, U("%I64d"), roomid);
-
-	_usr.rpt.rquestcnt++;
 	_log.Log(_log.Time().append(U("Reception requests to check the bill of ")).append(rid).append(U(".")));
 
+	_dlocker.lock();
+	int64_t handler = _usr.rpt.handler;
  	_usr.rpt.latest = std::time(nullptr);
-
 	json::value msg;
-	try
-	{
+	//try
+	//{
 		auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
 			return cur->id == roomid;
 		});
-		msg = (*room)->invoice.Load(din, dout);
-	}
-	catch (...)
-	{
-		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
-	}
+		if (room != _usr.rooms.end())
+		{
+			msg = (*room)->invoice.Load(din, dout);
+		}
+	//}
+	//catch (...)
+	//{
+	//	_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
+	//}
+	_dlocker.unlock();
 
-	_com.PushMessage(ACMessage{ _usr.rpt.handler, ACMsgType::FETCHINVOICE, msg });
-	_usr.rpt.rponsecnt++;
+	_com.PushMessage(ACMessage{ handler, ACMsgType::FETCHINVOICE, msg });
 }

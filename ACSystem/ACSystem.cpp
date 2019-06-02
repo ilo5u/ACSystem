@@ -44,7 +44,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		ACDbms acdbms;
 		bool ret = acdbms.Connect();
 		if (!ret)
+		{
 			return 3;
+		}
 
 		ACSystem acsystem{ accom, aclogger, acdbms, roomids };
 		acsystem.Wait();

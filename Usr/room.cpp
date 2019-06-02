@@ -134,6 +134,11 @@ json::value Invoice::Load(time_t datein, time_t dateout)
 	return _dbms.Select(ACDbms::obj_t::INVOICE, _room->id, datein, dateout);
 }
 
+void Invoice::Clear()
+{
+	_prep.clear();
+}
+
 Room::Room(int64_t roomid, ACDbms& dbms) :
 	id(roomid),
 	bill(this, dbms), invoice(this, dbms), report(this, dbms)
@@ -210,7 +215,7 @@ void Room::SetTargetTemp(double_t tt)
 	stpcount++;
 }
 
-void Room::Reset()
+void Room::Reset(bool opt)
 {
 	inservice = false;
 	state = state_t::STOPPED;
@@ -218,8 +223,12 @@ void Room::Reset()
 	if (_charging.joinable())
 		_charging.join();
 
-	invoice.Store(Invoice::opt_t::REQUESTOFF, std::time(nullptr), (int64_t)_fanspeed, _feerate, _totalfee);
-	report.Store(2, ontime, ontime + duration, _totalfee, dptcount, rdrcount, stpcount, sfscount);
+	if (opt)
+	{
+		invoice.Store(Invoice::opt_t::REQUESTOFF, std::time(nullptr), (int64_t)_fanspeed, _feerate, _totalfee);
+		invoice.Clear();
+		report.Store(2, ontime, ontime + duration, _totalfee, dptcount, rdrcount, stpcount, sfscount);
+	}
 
 	duration = 0;
 	_totalfee = 0.0;

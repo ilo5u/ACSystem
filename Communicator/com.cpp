@@ -142,6 +142,7 @@ int64_t ACCom::_fetch(const Token& token, method_t method, http_request& message
 	}
 	else
 	{
+		_tlocker.unlock();
 		return 0;
 	}
 }
@@ -214,6 +215,15 @@ void ACCom::_handle_get(http_request message)
 
 				_pulllocker.lock();
 				_pulls.push(ACMessage{ handler, ACMsgType::MONITOR, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("off")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), method_t::DEL, message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::SHUTDOWN, body });
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
 			}
@@ -527,25 +537,63 @@ void ACCom::_handle_delete(http_request message)
 
 void ACCom::_handle_options(http_request message)
 {
-	http_response rep;
-	rep.headers().add(U("Content-Type"), U("application/json"));
-	rep.headers().add(U("Access-Control-Allow-Origin"), U("*"));
-	rep.headers().add(U("Access-Control-Request-Method"), U("GET,POST,PUT,DELETE"));
-	rep.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
-	rep.headers().add(U("Access-Control-Max-Age"), U("1800"));
-	rep.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
-	rep.set_status_code(status_codes::OK);
-	message.reply(rep)
-		//rep.reply(status_codes::OK, out.body)
-		.then([](pplx::task<void> t)
+	auto queries = http::uri::split_query(message.relative_uri().query());
+	auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
+	json::value body = message.extract_json().get();
+
+	if (std::find(paths.begin(), paths.end(), U("api")) != paths.end()
+		&& std::find(paths.begin(), paths.end(), U("param")) != paths.end())
 	{
-		try {
-			t.get();
-		}
-		catch (...) {
-			//
-		}
-	});
+		int64_t handler = _fetch(U("Admin"), method_t::POST, message);
+
+		if (queries.find(U("Mode")) != queries.end())
+			body[U("Mode")] = json::value::string(queries.at(U("Mode")));
+
+		if (queries.find(U("TempHighLimit")) != queries.end())
+			body[U("TempHighLimit")] = json::value::number(_wtoi64(queries.at(U("TempHighLimit")).c_str()));
+
+		if (queries.find(U("TempLowLimit")) != queries.end())
+			body[U("TempLowLimit")] = json::value::number(_wtoi64(queries.at(U("TempLowLimit")).c_str()));
+
+		if (queries.find(U("DefaultTargetTemp")) != queries.end())
+			body[U("DefaultTargetTemp")] = json::value::number(_wtoi64(queries.at(U("DefaultTargetTemp")).c_str()));
+
+		if (queries.find(U("FeeRateH")) != queries.end())
+			body[U("FeeRateH")] = json::value::number(_wtof(queries.at(U("FeeRateH")).c_str()));
+
+		if (queries.find(U("FeeRateM")) != queries.end())
+			body[U("FeeRateM")] = json::value::number(_wtof(queries.at(U("FeeRateM")).c_str()));
+
+		if (queries.find(U("FeeRateL")) != queries.end())
+			body[U("FeeRateL")] = json::value::number(_wtof(queries.at(U("FeeRateL")).c_str()));
+
+		_pulllocker.lock();
+		_pulls.push(ACMessage{ handler, ACMsgType::SETPARAM, body });
+		ReleaseSemaphore(_pullsemophare, 1, NULL);
+		_pulllocker.unlock();
+	}
+	else
+	{
+		http_response rep;
+		rep.headers().add(U("Content-Type"), U("application/json"));
+		rep.headers().add(U("Access-Control-Allow-Origin"), U("*"));
+		rep.headers().add(U("Access-Control-Request-Method"), U("GET,POST,PUT,DELETE"));
+		rep.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
+		rep.headers().add(U("Access-Control-Max-Age"), U("1800"));
+		rep.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
+		rep.set_status_code(status_codes::OK);
+		message.reply(rep)
+			//rep.reply(status_codes::OK, out.body)
+			.then([](pplx::task<void> t)
+		{
+			try {
+				t.get();
+			}
+			catch (...) {
+				//
+			}
+		});
+	}
 }
 
 void ACCom::_reply()
@@ -566,82 +614,85 @@ void ACCom::_reply()
 
 		if (out.type != ACMsgType::INVALID)
 		{
-			try
-			{
+			//try
+			//{
 				LPToken token = (LPToken)conv(out.token);
 				_tlocker.lock();
 				auto recver = std::find_if(_tokens.begin(), _tokens.end(),
 					[&token](std::pair<LPToken, std::map<method_t, std::list<http_request>>>& cur) {
 					return cur.first == token;
 				});
-
-				method_t method;
-				switch (out.type)
+				if (recver != _tokens.end())
 				{
-				case ACMsgType::REQUESTON:
-				case ACMsgType::POWERON:
-				case ACMsgType::TEMPNOTIFICATION:
-					method = method_t::PUT;
-					break;
-
-				case ACMsgType::SETTEMP:
-				case ACMsgType::SETFANSPEED:
-				case ACMsgType::SETPARAM:
-					method = method_t::POST;
-					break;
-
-				case ACMsgType::REQUESTOFF:
-				case ACMsgType::SHUTDOWN:
-					method = method_t::DEL;
-					break;
-
-				case ACMsgType::STARTUP:
-				case ACMsgType::FETCHFEE:
-				case ACMsgType::FETCHINVOICE:
-				case ACMsgType::FETCHREPORT:
-				case ACMsgType::FETCHBILL:
-				case ACMsgType::MONITOR:
-					method = method_t::GET;
-					break;
-
-				default:
-					break;
-				}
-
-				if (((*recver).second).find(method) != (*recver).second.end())
-				{
-					http_request rep = std::move(((*recver).second)[method].front());
-					((*recver).second)[method].pop_front();
-					_tlocker.unlock();
-
-					http_response msg;
-					msg.headers().add(U("Access-Control-Allow-Origin"), U("*"));
-					msg.headers().add(U("Access-Control-Request-Method"), U("GET,POST,OPTIONS"));
-					msg.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
-					msg.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
-					msg.set_status_code(status_codes::OK);
-					msg.set_body(out.body);
-					rep.reply(msg)
-						//rep.reply(status_codes::OK, out.body)
-						.then([](pplx::task<void> t)
+					method_t method;
+					switch (out.type)
 					{
-						try {
-							t.get();
+					case ACMsgType::REQUESTON:
+					case ACMsgType::POWERON:
+					case ACMsgType::TEMPNOTIFICATION:
+						method = method_t::PUT;
+						break;
+
+					case ACMsgType::SETTEMP:
+					case ACMsgType::SETFANSPEED:
+					case ACMsgType::SETPARAM:
+						method = method_t::POST;
+						break;
+
+					case ACMsgType::REQUESTOFF:
+					case ACMsgType::SHUTDOWN:
+						method = method_t::DEL;
+						break;
+
+					case ACMsgType::STARTUP:
+					case ACMsgType::FETCHFEE:
+					case ACMsgType::FETCHINVOICE:
+					case ACMsgType::FETCHREPORT:
+					case ACMsgType::FETCHBILL:
+					case ACMsgType::MONITOR:
+						method = method_t::GET;
+						break;
+
+					default:
+						break;
+					}
+
+					if (((*recver).second).find(method) != (*recver).second.end())
+					{
+						if (((*recver).second)[method].size() > 0)
+						{
+							http_request rep = std::move(((*recver).second)[method].front());
+							((*recver).second)[method].pop_front();
+							_tlocker.unlock();
+
+							http_response msg;
+							msg.headers().add(U("Access-Control-Allow-Origin"), U("*"));
+							msg.headers().add(U("Access-Control-Request-Method"), U("GET,POST,OPTIONS"));
+							msg.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
+							msg.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
+							msg.set_status_code(status_codes::OK);
+							msg.set_body(out.body);
+							rep.reply(msg);
 						}
-						catch (...) {
-							//
+						else
+						{
+							_tlocker.unlock();
 						}
-					});
+					}
+					else
+					{
+						_tlocker.unlock();
+					}
 				}
 				else
 				{
 					_tlocker.unlock();
 				}
-			}
-			catch (...)
-			{
-				_replycontroller = std::move(std::thread{ std::bind(&ACCom::_reply, this) });
-			}
+			//}
+			//catch (...)
+			//{
+			//	_replycontroller = std::move(std::thread{ std::bind(&ACCom::_reply, this) });
+			//}
 		}
 	}
 }

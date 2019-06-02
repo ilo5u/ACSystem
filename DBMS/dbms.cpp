@@ -60,7 +60,8 @@ void ACDbms::Disconnect()
 
 void ACDbms::Insert(obj_t obj, json::value data)
 {
-	std::thread{ std::bind(&ACDbms::_insert, this, obj, data) }.detach();
+	// std::thread{ std::bind(&ACDbms::_insert, this, obj, data) }.detach();
+	_insert(obj, data);
 }
 
 struct invoice_t
@@ -116,14 +117,14 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 
 		_protection.lock();
 
-		SQLAllocStmt(_con, &stm);
-		SQLExecDirect(stm, sql, SQL_NTS);
-		SQLBindCol(
+		SQLRETURN ret = SQLAllocStmt(_con, &stm);
+		ret = SQLExecDirect(stm, sql, SQL_NTS);
+		ret = SQLBindCol(
 			stm, 1, SQL_C_SBIGINT,
 			&(bill.roomid), 0,
 			NULL
 		);
-		SQLRETURN ret = SQLBindCol(
+		ret = SQLBindCol(
 			stm, 2, SQL_C_DOUBLE,
 			&(bill.totalfee), 0,
 			NULL
@@ -141,7 +142,7 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 				records.push_back(add);
 			}
 		}
-		SQLFreeStmt(stm, SQL_DROP);
+		ret = SQLFreeStmt(stm, SQL_DROP);
 
 		_protection.unlock();
 
@@ -163,8 +164,8 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 
 		_protection.lock();
 
-		SQLAllocStmt(_con, &stm);
-		SQLRETURN ret = SQLExecDirect(stm, sql, SQL_NTS);
+		SQLRETURN ret = SQLAllocStmt(_con, &stm);
+		ret = SQLExecDirect(stm, sql, SQL_NTS);
 		ret = SQLBindCol(
 			stm, 1, SQL_C_SBIGINT,
 			&invoice.roomid, 0,
@@ -175,17 +176,17 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 			&(invoice.rqtime), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 3, SQL_C_SBIGINT,
 			&(invoice.rqduration), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 4, SQL_C_SBIGINT,
 			&(invoice.fanspeed), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 5, SQL_C_DOUBLE,
 			&(invoice.feerate), 0,
 			NULL
@@ -212,7 +213,7 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 				records.push_back(add);
 			}
 		}
-		SQLFreeStmt(stm, SQL_DROP);
+		ret = SQLFreeStmt(stm, SQL_DROP);
 
 		_protection.unlock();
 		data = json::value::array(records);
@@ -233,49 +234,49 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 
 		_protection.lock();
 
-		SQLAllocStmt(_con, &stm);
-		SQLExecDirect(stm, sql, SQL_NTS);
-		SQLBindCol(
+		SQLRETURN ret = SQLAllocStmt(_con, &stm);
+		ret = SQLExecDirect(stm, sql, SQL_NTS);
+		ret = SQLBindCol(
 			stm, 1, SQL_C_SBIGINT,
 			&(report.roomid), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 2, SQL_C_SBIGINT,
 			&(report.onoff), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 3, SQL_C_SBIGINT,
 			&(report.ontime), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 4, SQL_C_SBIGINT,
 			&(report.offtime), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 5, SQL_C_DOUBLE,
 			&(report.totalfee), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 6, SQL_C_SBIGINT,
 			&(report.dptcount), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 7, SQL_C_SBIGINT,
 			&(report.rdrcount), 0,
 			NULL
 		);
-		SQLBindCol(
+		ret = SQLBindCol(
 			stm, 8, SQL_C_SBIGINT,
 			&(report.stpcount), 0,
 			NULL
 		);
-		SQLRETURN ret = SQLBindCol(
+		ret = SQLBindCol(
 			stm, 9, SQL_C_SBIGINT,
 			&(report.sfscount), 0,
 			NULL
@@ -338,9 +339,9 @@ void ACDbms::_insert(obj_t obj, json::value data)
 		);
 		_protection.lock();
 
-		SQLAllocStmt(_con, &stm);
-		SQLExecDirect(stm, sql, SQL_NTS);
-		SQLFreeStmt(stm, SQL_DROP);
+		SQLRETURN ret = SQLAllocStmt(_con, &stm);
+		ret = SQLExecDirect(stm, sql, SQL_NTS);
+		ret = SQLFreeStmt(stm, SQL_DROP);
 
 		_protection.unlock();
 	}
@@ -374,7 +375,7 @@ void ACDbms::_insert(obj_t obj, json::value data)
 
 		SQLRETURN ret = SQLAllocStmt(_con, &stm);
 		ret = SQLExecDirect(stm, sql, lstrlen(sql));
-		SQLFreeStmt(stm, SQL_DROP);
+		ret = SQLFreeStmt(stm, SQL_DROP);
 
 		_protection.unlock();
 	}

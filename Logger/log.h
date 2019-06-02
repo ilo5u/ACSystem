@@ -20,11 +20,11 @@ public:
 
 private:
 	std::atomic<bool> _onlogging;
-
-	const int32_t _maxn;
 	std::mutex _blocker;
 	std::list<std::wstring> _buffer;
-	std::list<std::wstring> _flushout;
+
 	std::thread _fcontroller;
 	void _persistence();
+
+	HANDLE _fsemophare;
 };

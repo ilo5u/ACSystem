@@ -5,10 +5,12 @@ class ACSObj
 public:
 	ACSObj(Room& r, Room::speed_t fs) :
 		room(r), fanspeed(fs), timestamp(std::time(nullptr)), duration(0),
-		_running(true), _sid(std::bind(&ACSObj::_service, this))
+		_running(true), _sid()
 	{
 		r.state = Room::state_t::SERVICE;
 		r.dptcount++;
+
+		_sid = std::move(std::thread{ std::bind(&ACSObj::_service, this) });
 	}
 
 	~ACSObj()
@@ -97,6 +99,7 @@ private:
 	std::mutex _dlocker;
 	std::list<ACSObj*> _acss;
 	std::list<ACWObj*> _acws;
+	std::map<int64_t, bool> _watcher;
 
 	std::atomic<bool> _onrunning;
 	std::thread _mcontroller;
@@ -105,6 +108,9 @@ private:
 	std::atomic<bool> _onstartup;
 	std::thread _ccontroller;
 	void _check();
+
+	std::thread _acontroller;
+	void _alive();
 private:
 	void _room(const ACMessage& msg);
 	void _requeston(int64_t id, double_t ctemp);
