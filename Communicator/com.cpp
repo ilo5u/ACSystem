@@ -38,6 +38,10 @@ ACCom::ACCom(const std::wstring& address) :
 			methods::DEL,
 			std::bind(&ACCom::_handle_delete, this, std::placeholders::_1)
 		);
+		_listener->support(
+			methods::OPTIONS,
+			std::bind(&ACCom::_handle_options, this, std::placeholders::_1)
+		);
 
 		_pullsemophare = CreateSemaphore(NULL, 0, 0x80, NULL);
 		_pushsemophare = CreateSemaphore(NULL, 0, 0x80, NULL);
@@ -152,7 +156,46 @@ void ACCom::_handle_get(http_request message)
 
 		if (paths[0].compare(U("api")) == 0)
 		{
-			if (paths[1].compare(U("power")) == 0)
+			if (paths[1].compare(U("on")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), method_t::PUT, message);
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::POWERON, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("param")) == 0)
+			{
+				int64_t handler = _fetch(U("Admin"), method_t::POST, message);
+
+				if (queries.find(U("Mode")) != queries.end())
+					body[U("Mode")] = json::value::string(queries.at(U("Mode")));
+
+				if (queries.find(U("TempHighLimit")) != queries.end())
+					body[U("TempHighLimit")] = json::value::number(_wtoi64(queries.at(U("TempHighLimit")).c_str()));
+
+				if (queries.find(U("TempLowLimit")) != queries.end())
+					body[U("TempLowLimit")] = json::value::number(_wtoi64(queries.at(U("TempLowLimit")).c_str()));
+
+				if (queries.find(U("DefaultTargetTemp")) != queries.end())
+					body[U("DefaultTargetTemp")] = json::value::number(_wtoi64(queries.at(U("DefaultTargetTemp")).c_str()));
+
+				if (queries.find(U("FeeRateH")) != queries.end())
+					body[U("FeeRateH")] = json::value::number(_wtof(queries.at(U("FeeRateH")).c_str()));
+
+				if (queries.find(U("FeeRateM")) != queries.end())
+					body[U("FeeRateM")] = json::value::number(_wtof(queries.at(U("FeeRateM")).c_str()));
+
+				if (queries.find(U("FeeRateL")) != queries.end())
+					body[U("FeeRateL")] = json::value::number(_wtof(queries.at(U("FeeRateL")).c_str()));
+
+				_pulllocker.lock();
+				_pulls.push(ACMessage{ handler, ACMsgType::SETPARAM, body });
+				ReleaseSemaphore(_pullsemophare, 1, NULL);
+				_pulllocker.unlock();
+			}
+			else if (paths[1].compare(U("power")) == 0)
 			{
 				int64_t handler = _fetch(U("Admin"), method_t::GET, message);
 
@@ -480,6 +523,29 @@ void ACCom::_handle_delete(http_request message)
 		);
 	}
 	return;
+}
+
+void ACCom::_handle_options(http_request message)
+{
+	http_response rep;
+	rep.headers().add(U("Content-Type"), U("application/json"));
+	rep.headers().add(U("Access-Control-Allow-Origin"), U("*"));
+	rep.headers().add(U("Access-Control-Request-Method"), U("GET,POST,PUT,DELETE"));
+	rep.headers().add(U("Access-Control-Allow-Credentials"), U("true"));
+	rep.headers().add(U("Access-Control-Max-Age"), U("1800"));
+	rep.headers().add(U("Access-Control-Allow-Headers"), U("Content-Type,Access-Token,x-requested-with,Authorization"));
+	rep.set_status_code(status_codes::OK);
+	message.reply(rep)
+		//rep.reply(status_codes::OK, out.body)
+		.then([](pplx::task<void> t)
+	{
+		try {
+			t.get();
+		}
+		catch (...) {
+			//
+		}
+	});
 }
 
 void ACCom::_reply()

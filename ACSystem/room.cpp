@@ -193,6 +193,12 @@ void ACSystem::_requestoff(int64_t id)
 
 	_com.PushMessage(ACMessage{ (*room)->handler, ACMsgType::REQUESTOFF, msg });
 	(*room)->rponsecnt++;
+
+	wchar_t fr[0xF];
+	std::swprintf(fr, U("%lf"), msg[U("FeeRate")].as_double());
+	wchar_t dr[0xF];
+	std::swprintf(dr, U("%I64d"), (int64_t)msg[U("Duration")].as_double());
+	_log.Log(_log.Time().append(rid).append(U(" Fee rate is ")).append(fr).append(U(" and duration is ")).append(dr).append(U(" .")));
 }
 
 void ACSystem::_settemp(int64_t id, double_t ttemp)
@@ -267,8 +273,23 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 		{
 			(*sobj)->fanspeed = fanspeed;
 			(*sobj)->room.SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
-
-			_log.Log(_log.Time().append(rid).append(U(" is in Service-Queue.")));
+			_log.Log(_log.Time().append(rid).append(U(" still stays in Service-Queue.")));
+		}
+		else if ((int64_t)_acss.size() < _capacity)
+		{
+			auto wobj = std::find_if(_acws.begin(), _acws.end(), [&room](const ACWObj* obj) {
+				return (*room)->id == (*obj).room.id;
+			});
+			if (wobj != _acws.end())
+			{
+				delete *wobj;
+				*wobj = nullptr;
+				_acws.erase(wobj);
+				_log.Log(_log.Time().append(rid).append(U(" has been removed from Wait-Queue.")));
+			}
+			_acss.push_back(new ACSObj{ *(*room), fanspeed });
+			(*room)->SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
+			_log.Log(_log.Time().append(rid).append(U(" has been movee into Service-Queue.")));
 		}
 		else
 		{
@@ -283,7 +304,7 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 				Room::speed_t minfs{ Room::speed_t::LMT };
 				for (auto elem = _acss.begin(); elem != _acss.end(); ++elem)
 				{
-					if ((*elem)->fanspeed < fanspeed && (*elem)->fanspeed <= minfs)
+					if ((*elem)->fanspeed <= fanspeed && (*elem)->fanspeed <= minfs)
 					{
 						prep.push_back(elem);
 						minfs = (*elem)->fanspeed;
@@ -295,18 +316,18 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 					if (wobj != _acws.end())
 					{
 						(*wobj)->tfanspeed = fanspeed;
-						_log.Log(_log.Time().append(rid).append(U(" still stays in Wait-Queue.")));
+						_log.Log(_log.Time().append(rid).append(U(" still stays in Wait-Queue cause its fanspeed is lower than all.")));
 					}
 					else
 					{
 						_acws.push_back(new ACWObj{ *(*room), fanspeed, 120 });
-						_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue.")));
+						_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue cause its fanspeed is lower than all.")));
 					}
 				}
 				else
 				{
 					std::list<std::list<ACSObj*>::iterator> maximal;
-					time_t longest = 0;
+					time_t longest = -1;
 					for (auto elem = prep.begin(); elem != prep.end(); ++elem)
 					{
 						time_t dr = (*(*elem))->duration;
@@ -318,27 +339,30 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 						}
 					}
 
-					auto towait = maximal.back();
-					_acws.push_back(new ACWObj{ (*towait)->room, (*room)->GetFanspeed(true), 120 });
-
-					std::swprintf(rid, U("%I64d"), (*towait)->room.id);
-					_log.Log(_log.Time().append(rid).append(U(" has been  moved into Wait-Queue.")));
-
-					delete *towait;
-					*towait = nullptr;
-					_acss.erase(towait);
-
-					if (wobj != _acws.end())
+					if (maximal.size() > 0)
 					{
-						delete *wobj;
-						*wobj = nullptr;
-						_acws.erase(wobj);
+						auto towait = maximal.back();
+						_acws.push_back(new ACWObj{ (*towait)->room, (*room)->GetFanspeed(true), 120 });
+
+						std::swprintf(rid, U("%I64d"), (*towait)->room.id);
+						_log.Log(_log.Time().append(rid).append(U(" has been  moved into Wait-Queue.")));
+
+						delete *towait;
+						*towait = nullptr;
+						_acss.erase(towait);
+
+						if (wobj != _acws.end())
+						{
+							delete *wobj;
+							*wobj = nullptr;
+							_acws.erase(wobj);
+						}
+
+						_acss.push_back(new ACSObj{ *(*room), fanspeed });
+						(*room)->SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
+
+						_log.Log(_log.Time().append(rid).append(U(" has been  moved into Serice-Queue.")));
 					}
-
-					_acss.push_back(new ACSObj{ *(*room), fanspeed });
-					(*room)->SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
-
-					_log.Log(_log.Time().append(rid).append(U(" has been  moved into Serice-Queue.")));
 				}
 			}
 			else if (fanspeed == fs)
@@ -347,13 +371,11 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 				{
 					(*wobj)->tfanspeed = fanspeed;
 					(*wobj)->duration = 120;
-
-					_log.Log(_log.Time().append(rid).append(U(" is in Wait-Queue.")));
+					_log.Log(_log.Time().append(rid).append(U(" still stays in Wait-Queue.")));
 				}
 				else
 				{
 					_acws.push_back(new ACWObj{ *(*room), fanspeed, 120 });
-
 					_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue.")));
 				}
 			}
@@ -363,7 +385,7 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 				{
 					(*wobj)->tfanspeed = fanspeed;
 					(*wobj)->duration = INT64_MAX;
-					_log.Log(_log.Time().append(rid).append(U(" is in Wait-Queue until Service-Queue is available.")));
+					_log.Log(_log.Time().append(rid).append(U(" still stays in Wait-Queue until Service-Queue is available.")));
 				}
 				else
 				{
@@ -385,6 +407,10 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 
 	_com.PushMessage(ACMessage{ (*room)->handler, ACMsgType::SETFANSPEED, msg });
 	(*room)->rponsecnt++;
+
+	wchar_t fr[0xF];
+	std::swprintf(fr, U("%lf"), msg[U("FeeRate")].as_double());
+	_log.Log(_log.Time().append(rid).append(U(" Fee rate is ")).append(fr).append(U(" .")));
 }
 
 void ACSystem::_fetchfee(int64_t id)
@@ -417,6 +443,12 @@ void ACSystem::_fetchfee(int64_t id)
 
 	_com.PushMessage(ACMessage{ (*room)->handler, ACMsgType::FETCHFEE, msg });
 	(*room)->rponsecnt++;
+
+	wchar_t fr[0xF];
+	std::swprintf(fr, U("%lf"), msg[U("FeeRate")].as_double());
+	wchar_t fee[0xF];
+	std::swprintf(fee, U("%lf"), msg[U("Fee")].as_double());
+	_log.Log(_log.Time().append(rid).append(U(" Fee rate is ")).append(fr).append(U(" and fee is ")).append(fee).append(U(" .")));
 }
 
 void ACSystem::_notify(int64_t id, double_t ctemp)
@@ -438,13 +470,9 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 		std::swprintf(tt, U("%.2lf"), (*room)->GetTargetTemp());
 		_log.Log(_log.Time().append(rid).append(U(" notifies current temperature as ")).append(ct).append(U("¡æ, and target is ")).append(tt).append(U("¡æ.")));
 
-
 		(*room)->latest = std::time(nullptr);
 		(*room)->rquestcnt++;
-
 		(*room)->ctemp = ctemp;
-
-		Room::state_t state = (*room)->state;
 		double_t ttemp = (*room)->GetTargetTemp();
 
 		_dlocker.lock();
@@ -456,9 +484,8 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 		{
 			if (std::fabs(ctemp - ttemp) < 0.5)
 			{
-				state = Room::state_t::SLEEPED;
-
 				_acws.push_back(new ACWObj{ (*ins)->room, (*ins)->room.GetFanspeed(true), INT64_MAX });
+				(*room)->state = Room::state_t::SLEEPED;
 
 				delete *ins;
 				*ins = nullptr;
@@ -500,7 +527,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 			{
 				if (std::fabs(ctemp - ttemp) < 0.5)
 				{
-					state = Room::state_t::SLEEPED;
+					(*room)->state = Room::state_t::SLEEPED;
 				}
 				else
 				{
@@ -517,7 +544,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 					}
 					else
 					{
-						state = Room::state_t::SUSPEND;
+						(*room)->state = Room::state_t::SUSPEND;
 					}
 				}
 			}
@@ -525,7 +552,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 
 		_dlocker.unlock();
 
-		switch (state)
+		switch ((*room)->state)
 		{
 		case Room::state_t::SERVICE:
 			msg[U("State")] = json::value::string(U("ON"));
@@ -551,4 +578,6 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 
 	_com.PushMessage(ACMessage{ (*room)->handler, ACMsgType::TEMPNOTIFICATION, msg });
 	(*room)->rponsecnt++;
+
+	_log.Log(_log.Time().append(rid).append(U(" is ")).append(msg[U("State")].as_string()));
 }

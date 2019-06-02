@@ -129,9 +129,10 @@ void ACSystem::_check()
 			if (valid)
 			{
 				wchar_t rid[0xF];
-				time_t mindr = 0;
+				time_t mindr = -1;
 				time_t dr = 0;
 
+				towait = _acss.end();
 				for (auto obj = _acss.begin(); obj != _acss.end(); ++obj)
 				{
 					dr = (*obj)->duration;
@@ -147,7 +148,7 @@ void ACSystem::_check()
 					_acws.push_back(new ACWObj{ (*towait)->room, (*towait)->room.GetFanspeed(), 120 });
 
 					std::swprintf(rid, U("%I64d"), (*towait)->room.id);
-					_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue.")));
+					_log.Log(_log.Time().append(rid).append(U(" has been moved into Wait-Queue cause timed out.")));
 
 					delete *towait;
 					*towait = nullptr;
@@ -158,7 +159,7 @@ void ACSystem::_check()
 				(*toservice)->room.SetFanspeed((*toservice)->tfanspeed, _usr.admin.frate[(*toservice)->tfanspeed]);
 
 				std::swprintf(rid, U("%I64d"), (*toservice)->room.id);
-				_log.Log(_log.Time().append(rid).append(U(" has been moved into Serivce-Queue.")));
+				_log.Log(_log.Time().append(rid).append(U(" has been moved into Serivce-Queue cause timed out.")));
 
 				delete *toservice;
 				*toservice = nullptr;

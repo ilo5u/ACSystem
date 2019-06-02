@@ -204,7 +204,7 @@ json::value ACDbms::Select(obj_t obj, int64_t roomid, time_t datein, time_t date
 				json::value add;
 				add[U("RoomId")] = json::value::number(invoice.roomid);
 				add[U("RequestTime")] = json::value::number(invoice.rqtime);
-				add[U("RquestDuration")] = json::value::number(invoice.rqduration);
+				add[U("RequestDuration")] = json::value::number(invoice.rqduration);
 				add[U("FanSpeed")] = json::value::number(invoice.fanspeed);
 				add[U("FeeRate")] = json::value::number(invoice.feerate);
 				add[U("Fee")] = json::value::number(invoice.totalfee);

@@ -72,8 +72,8 @@ json::value Report::Load(time_t datein, time_t dateout)
 			onoff += (*elem).at(U("TimesOfOnOff")).as_integer();
 			duration += (int64_t)((*elem).at(U("Duration")).as_double());
 			totalfee += (*elem).at(U("TotalFee")).as_double();
-			dptcount += (*elem).at(U("TimesOfDisptch")).as_integer();
-			rdrcount += (*elem).at(U("TimesOfRDR")).as_integer();
+			dptcount += (*elem).at(U("TimesOfDispatch")).as_integer();
+			rdrcount += (*elem).at(U("NumberOfRDR")).as_integer();
 			stpcount += (*elem).at(U("TimesOfChangeTemp")).as_integer();
 			sfscount += (*elem).at(U("TimesOfChangeFanSpeed")).as_integer();
 		}

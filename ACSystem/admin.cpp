@@ -65,7 +65,7 @@ void ACSystem::_poweron()
 	json::value msg;
 	if (_usr.admin.state != Admin::state_t::OFF)
 	{
-		msg[U("state")] = json::value::string(U("error"));
+		msg[U("state")] = json::value::string(U("SetMode"));
 		_log.Log(_log.Time().append(U(" System had been started already.")));
 	}
 	else
@@ -181,19 +181,22 @@ void ACSystem::_monitor(int64_t roomid)
 		switch (state)
 		{
 		case Room::state_t::SERVICE:
-			msg[U("state")] = json::value::string(U("Service"));
+			msg[U("state")] = json::value::string(U("ON"));
 			break;
 		case Room::state_t::STOPPED:
-			msg[U("state")] = json::value::string(U("Stopped"));
+			msg[U("state")] = json::value::string(U("OFF"));
 			break;
 		case Room::state_t::SUSPEND:
-			msg[U("state")] = json::value::string(U("Suspend"));
+			msg[U("state")] = json::value::string(U("WAIT"));
+			break;
+		case Room::state_t::SLEEPED:
+			msg[U("state")] = json::value::string(U("SLEEP"));
 			break;
 		default:
 			break;
 		}
 		msg[U("CurrentTemp")] = json::value::number(ctemp);
-		msg[U("TargetTemp")] = json::value::number(ttemp);
+		msg[U("TargetTemp")] = json::value::number((int64_t)ttemp);
 		msg[U("Fan")] = json::value::number((int64_t)fspeed);
 		msg[U("FeeRate")] = json::value::number(frate);
 		msg[U("Fee")] = json::value::number(fee);
@@ -201,17 +204,31 @@ void ACSystem::_monitor(int64_t roomid)
 	}
 	catch (std::exception&)
 	{
-		msg[U("state")] = json::value::string(U("error"));
+		msg[U("state")] = json::value::string(U("OFF"));
+		msg[U("CurrentTemp")] = json::value::number(0);
+		msg[U("TargetTemp")] = json::value::number(0);
+		msg[U("Fan")] = json::value::number(0);
+		msg[U("FeeRate")] = json::value::number(0.0);
+		msg[U("Fee")] = json::value::number(0.0);
+		msg[U("Duration")] = json::value::number(0);
 		_log.Log(_log.Time().append(rid).append(U(" System state error.")));
 	}
 	catch (...)
 	{
-		msg[U("state")] = json::value::string(U("error"));
+		msg[U("state")] = json::value::string(U("OFF"));
+		msg[U("CurrentTemp")] = json::value::number(0);
+		msg[U("TargetTemp")] = json::value::number(0);
+		msg[U("Fan")] = json::value::number(0);
+		msg[U("FeeRate")] = json::value::number(0.0);
+		msg[U("Fee")] = json::value::number(0.0);
+		msg[U("Duration")] = json::value::number(0);
 		_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
 	}
 
 	_com.PushMessage(ACMessage{ _usr.admin.handler, ACMsgType::MONITOR, msg });
 	_usr.admin.rponsecnt++;
+
+	_log.Log(_log.Time().append(rid).append(U(" ")).append(msg.serialize()));
 }
 
 void ACSystem::_shutdown()

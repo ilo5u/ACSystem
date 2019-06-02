@@ -190,7 +190,7 @@ struct Admin :
 		{Room::speed_t::HGH, 1.5}
 	};
 
-	state_t state{ state_t::READY };
+	state_t state{ state_t::OFF };
 	opt_t opt{ opt_t::IDLE };
 
 	time_t start{ 0 };
@@ -226,10 +226,10 @@ struct Mgr :
 		YEAR
 	};
 
-	const time_t day = 60 * 60 * 24;
-	const time_t week = 60 * 60 * 24 * 7;
-	const time_t month = 60 * 60 * 24 * 30;
-	const time_t year = 60 * 60 * 24 * 365;
+	static const time_t day = 60 * 60 * 24;
+	static const time_t week = 60 * 60 * 24 * 7;
+	static const time_t month = 60 * 60 * 24 * 30;
+	static const time_t year = 60 * 60 * 24 * 365;
 };
 
 struct ACUsr

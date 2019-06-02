@@ -103,6 +103,7 @@ private:
 	void _handle_put(http_request message);
 	void _handle_post(http_request message);
 	void _handle_delete(http_request message);
+	void _handle_options(http_request message);
 
 private:
 	std::queue<ACMessage> _pulls;
