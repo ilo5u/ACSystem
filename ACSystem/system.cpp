@@ -245,6 +245,6 @@ void ACSystem::_alive()
 		}
 		_dlocker.unlock();
 
-		std::this_thread::sleep_for(std::chrono::seconds(6));
+		std::this_thread::sleep_for(std::chrono::seconds(12));
 	}
 }
