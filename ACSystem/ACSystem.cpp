@@ -36,27 +36,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	ACLog aclogger;
 	aclogger.Start();
 
-	try
+	ACCom accom(address);
+	accom.Start().wait();
+
+	ACDbms acdbms;
+	bool ret = acdbms.Connect();
+	if (!ret)
 	{
-		ACCom accom(address);
-		accom.Start().wait();
-
-		ACDbms acdbms;
-		bool ret = acdbms.Connect();
-		if (!ret)
-		{
-			return 3;
-		}
-
-		ACSystem acsystem{ accom, aclogger, acdbms, roomids };
-		acsystem.Wait();
-
-		return 0;
+		return 3;
 	}
-	catch (...)
-	{
-		return 4;
-	}
+
+	ACSystem acsystem{ accom, aclogger, acdbms, roomids };
+	acsystem.Start();
+
+	return 4;
 }
 
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单

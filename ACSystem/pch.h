@@ -11,7 +11,6 @@
 
 #include <cstdio>
 #include <Windows.h>
-#include <regex>
 #include <http_client.h>
 #include <filestream.h>
 #include <http_listener.h>              // HTTP server

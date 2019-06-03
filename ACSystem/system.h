@@ -4,21 +4,14 @@ class ACSObj
 {
 public:
 	ACSObj(Room& r, Room::speed_t fs) :
-		room(r), fanspeed(fs), timestamp(std::time(nullptr)), duration(0),
-		_running(true), _sid()
+		room(r), fanspeed(fs), timestamp(std::time(nullptr))
 	{
-		r.state = Room::state_t::SERVICE;
-		r.dptcount++;
-
-		_sid = std::move(std::thread{ std::bind(&ACSObj::_service, this) });
+		room.state = Room::state_t::SERVICE;
+		room.dptcount++;
 	}
 
 	~ACSObj()
 	{
-		_running = false;
-
-		if (_sid.joinable())
-			_sid.join();
 	}
 
 	ACSObj(const ACSObj&) = delete;
@@ -30,24 +23,9 @@ public:
 	Room& room;
 	Room::speed_t fanspeed;
 	time_t timestamp;
-	std::atomic<time_t> duration;
-
-private:
-	std::atomic<bool> _running;
-	std::thread _sid;
 
 public:
 	void Serve(double_t ctemp) { room.On(ctemp); }
-
-private:
-	void _service()
-	{
-		while (_running)
-		{
-			std::this_thread::sleep_for(std::chrono::seconds(1));
-			duration++;
-		}
-	}
 };
 
 class ACWObj
@@ -73,6 +51,9 @@ public:
 	Room::speed_t tfanspeed;
 	time_t timestamp;
 	time_t duration;
+
+public:
+	void Serve(double_t ctemp) { room.On(ctemp); }
 };
 
 class ACSystem
@@ -87,7 +68,7 @@ public:
 	ACSystem& operator=(ACSystem&&) = delete;
 
 public:
-	void Wait();
+	void Start();
 
 private:
 	ACCom& _com;
@@ -102,7 +83,6 @@ private:
 	std::map<int64_t, bool> _watcher;
 
 	std::atomic<bool> _onrunning;
-	std::thread _mcontroller;
 	void _master();
 
 	std::atomic<bool> _onstartup;
@@ -111,8 +91,28 @@ private:
 
 	std::thread _acontroller;
 	void _alive();
+
+	std::vector<std::thread> _ucontroller;
+	Semophare _roomspr;
+	Semophare _mgrspr;
+	Semophare _rptspr;
+	Semophare _adminspr;
+	std::mutex _roomlocker;
+	std::mutex _mgrlocker;
+	std::mutex _rptlocker;
+	std::mutex _adminlocker;
+	std::queue<ACMessage> _rooms;
+	std::queue<ACMessage> _mgrs;
+	std::queue<ACMessage> _rpts;
+	std::queue<ACMessage> _admins;
+
 private:
-	void _room(const ACMessage& msg);
+	void _postroom(const ACMessage& msg);
+	void _postmgr(const ACMessage& msg);
+	void _postrpt(const ACMessage& msg);
+	void _postadmin(const ACMessage& msg);
+
+	void _room();
 	void _requeston(int64_t id, double_t ctemp);
 	void _requestoff(int64_t id);
 	void _settemp(int64_t id, double_t ttemp);
@@ -120,7 +120,7 @@ private:
 	void _fetchfee(int64_t id);
 	void _notify(int64_t id, double_t ctemp);
 
-	void _admin(const ACMessage& msg);
+	void _admin();
 	void _poweron();
 	void _setparam(Room::mode_t mode,
 		double_t ht, double_t lt, double_t dt, 
@@ -130,10 +130,10 @@ private:
 	void _monitor(int64_t roomid);
 	void _shutdown();
 
-	void _mgr(const ACMessage& msg);
+	void _mgr();
 	void _fetchreport(int64_t roomid, Mgr::rtype_t rt, time_t head);
 
-	void _rpt(const ACMessage& msg);
+	void _rpt();
 	void _fetchbill(int64_t roomid, time_t din, time_t dout);
 	void _fetchinvoice(int64_t roomid, time_t din, time_t dout);
 };

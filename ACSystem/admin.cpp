@@ -1,11 +1,23 @@
 #include "pch.h"
 #include "system.h"
 
-void ACSystem::_admin(const ACMessage& msg)
+void ACSystem::_admin()
 {
+	ACMessage msg;
 	Room::mode_t mode;
-	//try
-	//{
+	while (_onrunning)
+	{
+		msg.type = ACMsgType::INVALID;
+		WaitForSingleObject(_adminspr, 1000);
+
+		_adminlocker.lock();
+		if (_admins.size() > 0)
+		{
+			msg = _admins.front();
+			_admins.pop();
+		}
+		_adminlocker.unlock();
+
 		switch (msg.type)
 		{
 		case ACMsgType::POWERON:
@@ -26,7 +38,7 @@ void ACSystem::_admin(const ACMessage& msg)
 					mode = Room::mode_t::COOL;
 				_setparam(
 					mode,
-					
+
 					(double_t)msg.body.at(U("TempHighLimit")).as_integer(),
 					(double_t)msg.body.at(U("TempLowLimit")).as_integer(),
 					(double_t)msg.body.at(U("DefaultTargetTemp")).as_integer(),
@@ -49,11 +61,8 @@ void ACSystem::_admin(const ACMessage& msg)
 		default:
 			break;
 		}
-	//}
-	//catch (...)
-	//{
-	//	_log.Log(_log.Time().append(U("Admin handling method crashed.")));
-	//}
+	}
+
 }
 
 void ACSystem::_poweron()
@@ -151,17 +160,23 @@ void ACSystem::_monitor(int64_t roomid)
 {
 	wchar_t rid[0xF];
 	std::swprintf(rid, U("%I64d"), roomid);
+	_log.Log(_log.Time().append(U("Administrator needs ")).append(rid).append(U(".")));
 
 	_dlocker.lock();
 	json::value msg;
 	int64_t handler = _usr.admin.handler;
-	//try
-	//{
-		if (_usr.admin.state != Admin::state_t::READY)
-			throw std::exception{ "System state error." };
-	
-		_log.Log(_log.Time().append(U("Administrator needs ")).append(rid).append(U(".")));
-
+	if (_usr.admin.state != Admin::state_t::READY)
+	{
+		msg[U("state")] = json::value::string(U("OFF"));
+		msg[U("CurrentTemp")] = json::value::number(0);
+		msg[U("TargetTemp")] = json::value::number(0);
+		msg[U("Fan")] = json::value::number(0);
+		msg[U("FeeRate")] = json::value::number(0.0);
+		msg[U("Fee")] = json::value::number(0.0);
+		msg[U("Duration")] = json::value::number(0);
+	}
+	else
+	{
 		auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [roomid](const Room* cur) {
 			return cur->id == roomid;
 		});
@@ -172,7 +187,7 @@ void ACSystem::_monitor(int64_t roomid)
 				return (*room)->id == obj->room.id;
 			});
 			if (sobj != _acss.end())
-				duration = (*sobj)->duration;
+				duration = std::time(nullptr) - (*sobj)->timestamp;
 
 			Room::state_t state = (*room)->state;
 			double_t ctemp = (*room)->ctemp;
@@ -215,29 +230,7 @@ void ACSystem::_monitor(int64_t roomid)
 			msg[U("Fee")] = json::value::number(0.0);
 			msg[U("Duration")] = json::value::number(0);
 		}
-	//}
-	//catch (std::exception&)
-	//{
-	//	msg[U("state")] = json::value::string(U("OFF"));
-	//	msg[U("CurrentTemp")] = json::value::number(0);
-	//	msg[U("TargetTemp")] = json::value::number(0);
-	//	msg[U("Fan")] = json::value::number(0);
-	//	msg[U("FeeRate")] = json::value::number(0.0);
-	//	msg[U("Fee")] = json::value::number(0.0);
-	//	msg[U("Duration")] = json::value::number(0);
-	//	_log.Log(_log.Time().append(rid).append(U(" System state error.")));
-	//}
-	//catch (...)
-	//{
-	//	msg[U("state")] = json::value::string(U("OFF"));
-	//	msg[U("CurrentTemp")] = json::value::number(0);
-	//	msg[U("TargetTemp")] = json::value::number(0);
-	//	msg[U("Fan")] = json::value::number(0);
-	//	msg[U("FeeRate")] = json::value::number(0.0);
-	//	msg[U("Fee")] = json::value::number(0.0);
-	//	msg[U("Duration")] = json::value::number(0);
-	//	_log.Log(_log.Time().append(rid).append(U(" Room does not exist.")));
-	//}
+	}
 	_dlocker.unlock();
 
 	_com.PushMessage(ACMessage{ handler, ACMsgType::MONITOR, msg });

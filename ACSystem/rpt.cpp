@@ -1,37 +1,52 @@
 #include "pch.h"
 #include "system.h"
 
-void ACSystem::_rpt(const ACMessage& msg)
+void ACSystem::_rpt()
 {
-	switch (msg.type)
+	ACMessage msg;
+	while (_onrunning)
 	{
-	case ACMsgType::FETCHBILL:
-		if (msg.body.has_field(U("RoomId"))
-			&& msg.body.has_field(U("DateIn"))
-			&& msg.body.has_field(U("DateOut")))
-		{
-			_fetchbill(
-				msg.body.at(U("RoomId")).as_integer(),
-				(time_t)msg.body.at(U("DateIn")).as_double(),
-				(time_t)msg.body.at(U("DateOut")).as_double()
-			);
-		}
+		msg.type = ACMsgType::INVALID;
+		WaitForSingleObject(_rptspr, 1000);
 
-		break;
-	case ACMsgType::FETCHINVOICE:
-		if (msg.body.has_field(U("RoomId"))
-			&& msg.body.has_field(U("DateIn"))
-			&& msg.body.has_field(U("DateOut")))
+		_rptlocker.lock();
+		if (_rpts.size() > 0)
 		{
-			_fetchinvoice(
-				msg.body.at(U("RoomId")).as_integer(),
-				(time_t)msg.body.at(U("DateIn")).as_double(),
-				(time_t)msg.body.at(U("DateOut")).as_double()
-			);
+			msg = _rpts.front();
+			_rpts.pop();
 		}
-		break;
-	default:
-		break;
+		_rptlocker.unlock();
+
+		switch (msg.type)
+		{
+		case ACMsgType::FETCHBILL:
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("DateIn"))
+				&& msg.body.has_field(U("DateOut")))
+			{
+				_fetchbill(
+					msg.body.at(U("RoomId")).as_integer(),
+					(time_t)msg.body.at(U("DateIn")).as_double(),
+					(time_t)msg.body.at(U("DateOut")).as_double()
+				);
+			}
+
+			break;
+		case ACMsgType::FETCHINVOICE:
+			if (msg.body.has_field(U("RoomId"))
+				&& msg.body.has_field(U("DateIn"))
+				&& msg.body.has_field(U("DateOut")))
+			{
+				_fetchinvoice(
+					msg.body.at(U("RoomId")).as_integer(),
+					(time_t)msg.body.at(U("DateIn")).as_double(),
+					(time_t)msg.body.at(U("DateOut")).as_double()
+				);
+			}
+			break;
+		default:
+			break;
+		}
 	}
 }
 
@@ -47,14 +62,14 @@ void ACSystem::_fetchbill(int64_t roomid, time_t din, time_t dout)
 	json::value msg;
 	//try
 	//{
-		auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
-			return cur->id == roomid;
-		});
-		if (room != _usr.rooms.end())
-		{
-			msg = (*room)->bill.Load(din, dout);
-			(*room)->rdrcount++;
-		}
+	auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
+		return cur->id == roomid;
+	});
+	if (room != _usr.rooms.end())
+	{
+		msg = (*room)->bill.Load(din, dout);
+		(*room)->rdrcount++;
+	}
 	//}
 	//catch (...)
 	//{
@@ -73,17 +88,17 @@ void ACSystem::_fetchinvoice(int64_t roomid, time_t din, time_t dout)
 
 	_dlocker.lock();
 	int64_t handler = _usr.rpt.handler;
- 	_usr.rpt.latest = std::time(nullptr);
+	_usr.rpt.latest = std::time(nullptr);
 	json::value msg;
 	//try
 	//{
-		auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
-			return cur->id == roomid;
-		});
-		if (room != _usr.rooms.end())
-		{
-			msg = (*room)->invoice.Load(din, dout);
-		}
+	auto room = std::find_if(_usr.rooms.begin(), _usr.rooms.end(), [&roomid](const Room* cur) {
+		return cur->id == roomid;
+	});
+	if (room != _usr.rooms.end())
+	{
+		msg = (*room)->invoice.Load(din, dout);
+	}
 	//}
 	//catch (...)
 	//{

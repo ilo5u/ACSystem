@@ -3,11 +3,8 @@
 struct UBase
 {
 	ACCom::Handler handler{ 0 };
-
 	time_t latest{ 0 };
 	time_t period{ 0 };
-	//int64_t rquestcnt{ 0 };
-	//int64_t rponsecnt{ 0 };
 	bool inservice{ false };
 };
 

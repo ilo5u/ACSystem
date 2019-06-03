@@ -9,13 +9,11 @@ Bill::Bill(Room* room, ACDbms& dbms) :
 json::value Bill::Load(time_t datein, time_t dateout)
 {
 	json::array data = _dbms.Select(ACDbms::obj_t::BILL, _room->id, datein, dateout).as_array();
-
-	try
+	if (data.size() > 0)
 	{
 		double_t fee = 0.0;
 		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
 			fee += (*elem)[U("totalfee")].as_double();
-
 		json::value bill;
 		bill[U("RoomId")] = json::value::number(_room->id);
 		bill[U("TotalFee")] = json::value::number(fee);
@@ -23,7 +21,7 @@ json::value Bill::Load(time_t datein, time_t dateout)
 		bill[U("DateOut")] = json::value::number(dateout);
 		return bill;
 	}
-	catch (...)
+	else
 	{
 		return {};
 	}
@@ -36,37 +34,33 @@ Report::Report(Room* room, ACDbms& dbms) :
 
 void Report::Store(int64_t onoff, time_t ontime, time_t offtime, double_t totalfee, int64_t dptcount, int64_t rdrcount, int64_t stpcount, int64_t sfscount)
 {
-	try
-	{
-		json::value data;
-		data[U("roomid")] = json::value::number(_room->id);
-		data[U("onoff")] = json::value::number(onoff);
-		data[U("ontime")] = json::value::number(ontime);
-		data[U("offtime")] = json::value::number(offtime);
-		data[U("totalfee")] = json::value::number(totalfee);
-		data[U("dptcount")] = json::value::number(dptcount);
-		data[U("rdrcount")] = json::value::number(rdrcount);
-		data[U("stpcount")] = json::value::number(stpcount);
-		data[U("sfscount")] = json::value::number(sfscount);
-		_dbms.Insert(ACDbms::obj_t::REPORT, data);
-	}
-	catch (...)
-	{
-	}
+	json::value data;
+	data[U("roomid")] = json::value::number(_room->id);
+	data[U("onoff")] = json::value::number(onoff);
+	data[U("ontime")] = json::value::number(ontime);
+	data[U("offtime")] = json::value::number(offtime);
+	data[U("totalfee")] = json::value::number(totalfee);
+	data[U("dptcount")] = json::value::number(dptcount);
+	data[U("rdrcount")] = json::value::number(rdrcount);
+	data[U("stpcount")] = json::value::number(stpcount);
+	data[U("sfscount")] = json::value::number(sfscount);
+	_dbms.Insert(ACDbms::obj_t::REPORT, data);
 }
 
 json::value Report::Load(time_t datein, time_t dateout)
 {
 	json::array data = _dbms.Select(ACDbms::obj_t::REPORT, _room->id, datein, dateout).as_array();
-	try
+	int64_t onoff = 0;
+	int64_t duration = 0;
+	double_t totalfee = 0;
+	int64_t dptcount = 0;
+	int64_t rdrcount = 0;
+	int64_t stpcount = 0;
+	int64_t sfscount = 0;
+	json::value report;
+	if (data.size() > 0)
 	{
-		int64_t onoff = 0;
-		int64_t duration = 0;
-		double_t totalfee = 0;
-		int64_t dptcount = 0;
-		int64_t rdrcount = 0;
-		int64_t stpcount = 0;
-		int64_t sfscount = 0;
+
 		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
 		{
 			onoff += (*elem).at(U("TimesOfOnOff")).as_integer();
@@ -77,22 +71,17 @@ json::value Report::Load(time_t datein, time_t dateout)
 			stpcount += (*elem).at(U("TimesOfChangeTemp")).as_integer();
 			sfscount += (*elem).at(U("TimesOfChangeFanSpeed")).as_integer();
 		}
+	}
+	report[U("RoomId")] = json::value::number(_room->id);
+	report[U("TimesOfOnOff")] = json::value::number(onoff);
+	report[U("Duration")] = json::value::number(duration);
+	report[U("TotalFee")] = json::value::number(totalfee);
+	report[U("TimesOfDispatch")] = json::value::number(dptcount);
+	report[U("NumberOfRDR")] = json::value::number(rdrcount);
+	report[U("TimesOfChangeTemp")] = json::value::number(stpcount);
+	report[U("TimesOfChangeFanSpeed")] = json::value::number(sfscount);
 
-		json::value report;
-		report[U("RoomId")] = json::value::number(_room->id);
-		report[U("TimesOfOnOff")] = json::value::number(onoff);
-		report[U("Duration")] = json::value::number(duration);
-		report[U("TotalFee")] = json::value::number(totalfee);
-		report[U("TimesOfDispatch")] = json::value::number(dptcount);
-		report[U("NumberOfRDR")] = json::value::number(rdrcount);
-		report[U("TimesOfChangeTemp")] = json::value::number(stpcount);
-		report[U("TimesOfChangeFanSpeed")] = json::value::number(sfscount);
-		return report;
-	}
-	catch (...)
-	{
-		return {};
-	}
+	return report;
 }
 
 Invoice::Invoice(Room* room, ACDbms& dbms) :
@@ -162,8 +151,7 @@ Room::speed_t Room::GetFanspeed(bool opt)
 	speed_t fs{ speed_t::NLL };
 	if (!opt)
 	{
-		if (std::fabs(ctemp - _ttemp) > 0.5
-			&& state != Room::state_t::SUSPEND)
+		if (state == Room::state_t::SERVICE)
 		{
 			_flocker.lock();
 			fs = _fanspeed;
