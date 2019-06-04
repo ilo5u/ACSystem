@@ -106,7 +106,7 @@ public:
 	};
 
 public:
-	Room(int64_t roomid, ACDbms& dbms);
+	Room(int64_t roomid, ACDbms& dbms, ACLog& log);
 	~Room();
 
 public:
@@ -118,8 +118,8 @@ public:
 
 	std::atomic<state_t> state{ state_t::STOPPED };
 	std::atomic<time_t> ontime{ 0 };
-	std::atomic<time_t> duration{ 0 };
 
+	std::atomic<time_t> duration{ 0 };
 	std::atomic<int64_t> dptcount{ 0 };
 	std::atomic<int64_t> rdrcount{ 0 };
 	std::atomic<int64_t> stpcount{ 0 };
@@ -135,11 +135,14 @@ private:
 	double_t _feerate{ 5.0 };
 	double_t _totalfee{ 0.0 };
 
-	std::thread _charging;
+	std::thread _cctronller;
 	std::mutex _flocker;
+	std::atomic<bool> _onrunning{ true };
 
 public:
+	void Run();
 	void On(double_t ct);
+	void Off(bool opt = false);
 
 public:
 	speed_t GetFanspeed(bool opt = false);
@@ -149,10 +152,12 @@ public:
 public:
 	void SetFanspeed(speed_t fs, double_t fr);
 	void SetTargetTemp(double_t tt);
-	void Reset(bool opt = false);
 
 private:
-	void _on(double_t ct);
+	void _charging();
+
+private:
+	ACLog& _log;
 };
 
 struct Admin :
@@ -188,7 +193,7 @@ struct Admin :
 		{Room::speed_t::HGH, 15.0}
 	};
 
-	state_t state{ state_t::OFF };
+	state_t state{ state_t::READY };
 	opt_t opt{ opt_t::IDLE };
 
 	time_t start{ 0 };

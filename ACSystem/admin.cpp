@@ -1,68 +1,52 @@
 #include "pch.h"
 #include "system.h"
 
-void ACSystem::_admin()
+void ACSystem::_admin(const ACMessage& msg)
 {
-	ACMessage msg;
 	Room::mode_t mode;
-	while (_onrunning)
+	switch (msg.type)
 	{
-		msg.type = ACMsgType::INVALID;
-		WaitForSingleObject(_adminspr, 1000);
-
-		_adminlocker.lock();
-		if (_admins.size() > 0)
+	case ACMsgType::POWERON:
+		_poweron();
+		break;
+	case ACMsgType::SETPARAM:
+		if (msg.body.has_field(U("Mode"))
+			&& msg.body.has_field(U("TempHighLimit"))
+			&& msg.body.has_field(U("TempLowLimit"))
+			&& msg.body.has_field(U("DefaultTargetTemp"))
+			&& msg.body.has_field(U("FeeRateH"))
+			&& msg.body.has_field(U("FeeRateM"))
+			&& msg.body.has_field(U("FeeRateL")))
 		{
-			msg = _admins.front();
-			_admins.pop();
-		}
-		_adminlocker.unlock();
+			if (msg.body.at(U("Mode")).as_string().compare(U("HOT")) == 0)
+				mode = Room::mode_t::HOT;
+			else if (msg.body.at(U("Mode")).as_string().compare(U("COOL")) == 0)
+				mode = Room::mode_t::COOL;
+			_setparam(
+				mode,
 
-		switch (msg.type)
-		{
-		case ACMsgType::POWERON:
-			_poweron();
-			break;
-		case ACMsgType::SETPARAM:
-			if (msg.body.has_field(U("Mode"))
-				&& msg.body.has_field(U("TempHighLimit"))
-				&& msg.body.has_field(U("TempLowLimit"))
-				&& msg.body.has_field(U("DefaultTargetTemp"))
-				&& msg.body.has_field(U("FeeRateH"))
-				&& msg.body.has_field(U("FeeRateM"))
-				&& msg.body.has_field(U("FeeRateL")))
-			{
-				if (msg.body.at(U("Mode")).as_string().compare(U("HOT")) == 0)
-					mode = Room::mode_t::HOT;
-				else if (msg.body.at(U("Mode")).as_string().compare(U("COOL")) == 0)
-					mode = Room::mode_t::COOL;
-				_setparam(
-					mode,
-
-					(double_t)msg.body.at(U("TempHighLimit")).as_integer(),
-					(double_t)msg.body.at(U("TempLowLimit")).as_integer(),
-					(double_t)msg.body.at(U("DefaultTargetTemp")).as_integer(),
-					msg.body.at(U("FeeRateH")).as_double(),
-					msg.body.at(U("FeeRateM")).as_double(),
-					msg.body.at(U("FeeRateL")).as_double()
-				);
-			}
-			break;
-		case ACMsgType::STARTUP:
-			_startup();
-			break;
-		case ACMsgType::SHUTDOWN:
-			_shutdown();
-			break;
-		case ACMsgType::MONITOR:
-			if (msg.body.has_field(U("RoomId")))
-				_monitor(msg.body.at(U("RoomId")).as_integer());
-			break;
-		default:
-			break;
+				(double_t)msg.body.at(U("TempHighLimit")).as_integer(),
+				(double_t)msg.body.at(U("TempLowLimit")).as_integer(),
+				(double_t)msg.body.at(U("DefaultTargetTemp")).as_integer(),
+				msg.body.at(U("FeeRateH")).as_double(),
+				msg.body.at(U("FeeRateM")).as_double(),
+				msg.body.at(U("FeeRateL")).as_double()
+			);
 		}
+		break;
+	case ACMsgType::STARTUP:
+		_startup();
+		break;
+	case ACMsgType::SHUTDOWN:
+		_shutdown();
+		break;
+	case ACMsgType::MONITOR:
+		if (msg.body.has_field(U("RoomId")))
+			_monitor(msg.body.at(U("RoomId")).as_integer());
+		break;
+	default:
+		break;
 	}
-
 }
 
 void ACSystem::_poweron()

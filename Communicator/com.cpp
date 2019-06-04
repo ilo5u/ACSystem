@@ -288,7 +288,7 @@ void ACCom::_handle_get(http_request message)
 
 				int64_t datein = 0;
 				std::swscanf(paths[4].c_str(), U("%I64d"), &datein);
-				body[U("DateIn")] = json::value::number(datein);
+				body[U("Date")] = json::value::number(datein);
 
 				int64_t handler = _fetch(U("Manager"), method_t::GET, message);
 
@@ -296,7 +296,6 @@ void ACCom::_handle_get(http_request message)
 				_pulls.push(ACMessage{ handler, ACMsgType::FETCHREPORT, body });
 				ReleaseSemaphore(_pullsemophare, 1, NULL);
 				_pulllocker.unlock();
-
 			}
 			else
 			{
@@ -355,6 +354,9 @@ void ACCom::_handle_put(http_request message)
 					body[U("RoomId")] = json::value::number(rid);
 
 					int64_t handler = _fetch(paths[2], method_t::PUT, message);
+
+					if (queries.find(U("CurrentRoomTemp")) != queries.end())
+						body[U("CurrentRoomTemp")] = json::value::number(_wtof(queries.at(U("CurrentRoomTemp")).c_str()));
 
 					_pulllocker.lock();
 					_pulls.push(ACMessage{ handler, ACMsgType::REQUESTON, body });

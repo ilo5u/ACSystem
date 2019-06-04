@@ -13,7 +13,7 @@ json::value Bill::Load(time_t datein, time_t dateout)
 	{
 		double_t fee = 0.0;
 		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
-			fee += (*elem)[U("totalfee")].as_double();
+			fee += (*elem)[U("TotalFee")].as_double();
 		json::value bill;
 		bill[U("RoomId")] = json::value::number(_room->id);
 		bill[U("TotalFee")] = json::value::number(fee);
@@ -128,28 +128,68 @@ void Invoice::Clear()
 	_prep.clear();
 }
 
-Room::Room(int64_t roomid, ACDbms& dbms) :
+Room::Room(int64_t roomid, ACDbms& dbms, ACLog& log) :
 	id(roomid),
-	bill(this, dbms), invoice(this, dbms), report(this, dbms)
+	bill(this, dbms), invoice(this, dbms), report(this, dbms),
+	_log(log)
 {
 }
 
 Room::~Room()
 {
+	_onrunning = false;
+	if (_cctronller.joinable())
+		_cctronller.join();
+}
+
+void Room::Run()
+{
+	_cctronller = std::move(std::thread{ std::bind(&Room::_charging, this) });
 }
 
 void Room::On(double_t ct)
 {
-	if (_charging.joinable())
-		_charging.join();
+	ontime = std::time(nullptr);
+	duration = 0;
+	dptcount = 0;
+	rdrcount = 0;
+	stpcount = 0;
+	sfscount = 0;
+	ctemp = ct;
 
-	_charging = std::move(std::thread{ std::bind(&Room::_on, this, ct) });
+	_totalfee = 0.0;
+}
+
+void Room::Off(bool opt)
+{
+	inservice = false;
+	state = state_t::STOPPED;
+
+	if (opt)
+	{
+		invoice.Store(Invoice::opt_t::REQUESTOFF, std::time(nullptr), (int64_t)_fanspeed, _feerate, _totalfee);
+		invoice.Clear();
+		report.Store(2, ontime, std::time(nullptr), _totalfee, dptcount, rdrcount, stpcount, sfscount);
+	}
+
+	ontime = 0;
+	duration = 0;
+	dptcount = 0;
+	rdrcount = 0;
+	stpcount = 0;
+	sfscount = 0;
 }
 
 Room::speed_t Room::GetFanspeed(bool opt)
 {
 	speed_t fs{ speed_t::NLL };
-	if (!opt)
+	if (opt)
+	{
+		_flocker.lock();
+		fs = _fanspeed;
+		_flocker.unlock();
+	}
+	else
 	{
 		if (state == Room::state_t::SERVICE)
 		{
@@ -157,12 +197,6 @@ Room::speed_t Room::GetFanspeed(bool opt)
 			fs = _fanspeed;
 			_flocker.unlock();
 		}
-	}
-	else
-	{
-		_flocker.lock();
-		fs = _fanspeed;
-		_flocker.unlock();
 	}
 
 	return fs;
@@ -203,64 +237,25 @@ void Room::SetTargetTemp(double_t tt)
 	stpcount++;
 }
 
-void Room::Reset(bool opt)
+void Room::_charging()
 {
-	inservice = false;
-	state = state_t::STOPPED;
-
-	if (_charging.joinable())
-		_charging.join();
-
-	if (opt)
+	while (_onrunning)
 	{
-		invoice.Store(Invoice::opt_t::REQUESTOFF, std::time(nullptr), (int64_t)_fanspeed, _feerate, _totalfee);
-		invoice.Clear();
-		report.Store(2, ontime, ontime + duration, _totalfee, dptcount, rdrcount, stpcount, sfscount);
-	}
-
-	duration = 0;
-	_totalfee = 0.0;
-	dptcount = 0;
-	rdrcount = 0;
-	stpcount = 0;
-	sfscount = 0;
-}
-
-void Room::_on(double_t ct)
-{
-	ontime = std::time(nullptr);
-	duration = 0;
-	_totalfee = 0.0;
-	dptcount = 0;
-	rdrcount = 0;
-	stpcount = 0;
-	sfscount = 0;
-
-	invoice.Store(Invoice::opt_t::REQUESTON, ontime, (int64_t)_fanspeed, _feerate, _totalfee);
-
-	ctemp = ct;
-	state = state_t::SERVICE;
-
-	bool off = false;
-	while (!off)
-	{
-		std::this_thread::sleep_for(std::chrono::seconds{ 6 });
-
-		duration++;
+		std::this_thread::sleep_for(std::chrono::seconds{ 1 });
 		switch (state)
 		{
 		case Room::state_t::SERVICE:
-			if (std::fabs(ctemp - _ttemp) > 0.5)
-			{
-				_flocker.lock();
-				_totalfee += (_feerate / 10.0);
-				_flocker.unlock();
-			}
+			duration = duration + 1;
+			_flocker.lock();
+			_totalfee += (_feerate / 60.0);
+			_flocker.unlock();
 			break;
-		case Room::state_t::STOPPED:
-			off = true;
 		default:
 			break;
 		}
 	}
+
+	wchar_t rid[0xFF];
+	std::swprintf(rid, U("%I64d"), id);
+	_log.Log(_log.Time().append(rid).append(U("Crashed.")));
 }

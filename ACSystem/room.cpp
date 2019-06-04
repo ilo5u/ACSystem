@@ -1,75 +1,60 @@
 #include "pch.h"
 #include "system.h"
 
-void ACSystem::_room()
+void ACSystem::_room(const ACMessage& msg)
 {
-	ACMessage msg;
-	while (_onrunning)
+	switch (msg.type)
 	{
-		msg.type = ACMsgType::INVALID;
-		WaitForSingleObject(_roomspr, 1000);
-		
-		_roomlocker.lock();
-		if (_rooms.size() > 0)
+	case ACMsgType::REQUESTON:
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("CurrentRoomTemp")))
 		{
-			msg = _rooms.front();
-			_rooms.pop();
+			_requeston(
+				msg.body.at(U("RoomId")).as_integer(),
+				msg.body.at(U("CurrentRoomTemp")).as_double()
+			);
 		}
-		_roomlocker.unlock();
-
-		switch (msg.type)
+		break;
+	case ACMsgType::REQUESTOFF:
+		if (msg.body.has_field(U("RoomId")))
+			_requestoff(msg.body.at(U("RoomId")).as_integer());
+		break;
+	case ACMsgType::FETCHFEE:
+		if (msg.body.has_field(U("RoomId")))
+			_fetchfee(msg.body.at(U("RoomId")).as_integer());
+		break;
+	case ACMsgType::SETTEMP:
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("TargetTemp")))
 		{
-		case ACMsgType::REQUESTON:
-			if (msg.body.has_field(U("RoomId"))
-				&& msg.body.has_field(U("CurrentRoomTemp")))
-			{
-				_requeston(
-					msg.body.at(U("RoomId")).as_integer(),
-					msg.body.at(U("CurrentRoomTemp")).as_double()
-				);
-			}
-			break;
-		case ACMsgType::REQUESTOFF:
-			if (msg.body.has_field(U("RoomId")))
-				_requestoff(msg.body.at(U("RoomId")).as_integer());
-			break;
-		case ACMsgType::FETCHFEE:
-			if (msg.body.has_field(U("RoomId")))
-				_fetchfee(msg.body.at(U("RoomId")).as_integer());
-			break;
-		case ACMsgType::SETTEMP:
-			if (msg.body.has_field(U("RoomId"))
-				&& msg.body.has_field(U("TargetTemp")))
-			{
-				_settemp(
-					msg.body.at(U("RoomId")).as_integer(),
-					(double_t)msg.body.at(U("TargetTemp")).as_integer()
-				);
-			}
-			break;
-		case ACMsgType::SETFANSPEED:
-			if (msg.body.has_field(U("RoomId"))
-				&& msg.body.has_field(U("FanSpeed")))
-			{
-				_setfanspeed(
-					msg.body.at(U("RoomId")).as_integer(),
-					(Room::speed_t)msg.body.at(U("FanSpeed")).as_integer()
-				);
-			}
-			break;
-		case ACMsgType::TEMPNOTIFICATION:
-			if (msg.body.has_field(U("RoomId"))
-				&& msg.body.has_field(U("CurrentRoomTemp")))
-			{
-				_notify(
-					msg.body.at(U("RoomId")).as_integer(),
-					msg.body.at(U("CurrentRoomTemp")).as_double()
-				);
-			}
-			break;
-		default:
-			break;
+			_settemp(
+				msg.body.at(U("RoomId")).as_integer(),
+				(double_t)msg.body.at(U("TargetTemp")).as_integer()
+			);
 		}
+		break;
+	case ACMsgType::SETFANSPEED:
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("FanSpeed")))
+		{
+			_setfanspeed(
+				msg.body.at(U("RoomId")).as_integer(),
+				(Room::speed_t)msg.body.at(U("FanSpeed")).as_integer()
+			);
+		}
+		break;
+	case ACMsgType::TEMPNOTIFICATION:
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("CurrentRoomTemp")))
+		{
+			_notify(
+				msg.body.at(U("RoomId")).as_integer(),
+				msg.body.at(U("CurrentRoomTemp")).as_double()
+			);
+		}
+		break;
+	default:
+		break;
 	}
 }
 
@@ -104,24 +89,27 @@ void ACSystem::_requeston(int64_t id, double_t ctemp)
 			else
 			{
 				(*room)->latest = std::time(nullptr);
-				(*room)->invoice.Prepare(Invoice::opt_t::REQUESTON, (*room)->latest);
-				(*room)->inservice = true;
 				(*room)->SetTargetTemp(_usr.admin.deftemp);
 				(*room)->SetFanspeed(_usr.admin.deffanspeed, _usr.admin.frate[_usr.admin.deffanspeed]);
-
+				(*room)->invoice.Prepare(Invoice::opt_t::REQUESTON, (*room)->latest);
+				(*room)->On(ctemp);
 				if ((int64_t)_acss.size() >= _capacity)
 				{
 					_acws.push_back(new ACWObj{ *(*room), _usr.admin.deffanspeed, 120 });
-					_acws.back()->Serve(ctemp);
-
 					msg[U("State")] = json::value::string(U("WAIT"));
 					_log.Log(_log.Time().append(rid).append(U(" Request on has been delayed.")));
+					(*room)->inservice = true;
+					(*room)->invoice.Store(
+						Invoice::opt_t::REQUESTON,
+						std::time(nullptr),
+						(int64_t)_usr.admin.deffanspeed,
+						_usr.admin.frate[_usr.admin.deffanspeed],
+						(*room)->GetTotalfee()
+					);
 				}
 				else
 				{
-					_acss.push_back(new ACSObj{ *(*room), _usr.admin.deffanspeed });
-					_acss.back()->Serve(ctemp);
-
+					_acss.push_back(new ACSObj{ *(*room), _usr.admin.deffanspeed, _usr.admin.frate[_usr.admin.deffanspeed] });
 					msg[U("State")] = json::value::string(U("ON"));
 					_log.Log(_log.Time().append(rid).append(U(" Request on has been handled.")));
 				}
@@ -195,7 +183,7 @@ void ACSystem::_requestoff(int64_t id)
 			msg[U("Duration")] = json::value::number((int64_t)(*room)->duration);
 			_com.PushMessage(ACMessage{ handler, ACMsgType::REQUESTOFF, msg });
 
-			(*room)->Reset(true);
+			(*room)->Off(true);
 		}
 		else
 		{
@@ -312,7 +300,7 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 					_acws.erase(wobj);
 					_log.Log(_log.Time().append(rid).append(U(" has been removed from Wait-Queue.")));
 				}
-				_acss.push_back(new ACSObj{ *(*room), fanspeed });
+				_acss.push_back(new ACSObj{ *(*room), fanspeed, _usr.admin.frate[fanspeed] });
 				(*room)->SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
 				_log.Log(_log.Time().append(rid).append(U(" has been movee into Service-Queue.")));
 			}
@@ -384,7 +372,7 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 								_acws.erase(wobj);
 							}
 
-							_acss.push_back(new ACSObj{ *(*room), fanspeed });
+							_acss.push_back(new ACSObj{ *(*room), fanspeed, _usr.admin.frate[fanspeed] });
 							(*room)->SetFanspeed(fanspeed, _usr.admin.frate[fanspeed]);
 
 							_log.Log(_log.Time().append(rid).append(U(" has been  moved into Serice-Queue.")));
@@ -531,8 +519,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 					{
 						auto toserivce = minimal.back();
 
-						_acss.push_back(new ACSObj{ (*toserivce)->room, (*toserivce)->tfanspeed });
-						(*toserivce)->room.state = Room::state_t::SERVICE;
+						_acss.push_back(new ACSObj{ (*toserivce)->room, (*toserivce)->tfanspeed, _usr.admin.frate[(*toserivce)->tfanspeed] });
 						(*toserivce)->room.SetFanspeed((*toserivce)->tfanspeed, _usr.admin.frate[(*toserivce)->tfanspeed]);
 
 						std::swprintf(rid, U("%I64d"), (*toserivce)->room.id);
@@ -570,9 +557,7 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 					{
 						if ((int64_t)_acss.size() < _capacity)
 						{
-							_acss.push_back(new ACSObj{ *(*room), (*inw)->tfanspeed });
-							(*room)->state = Room::state_t::SERVICE;
-
+							_acss.push_back(new ACSObj{ *(*room), (*inw)->tfanspeed, _usr.admin.frate[(*inw)->tfanspeed] });
 							std::swprintf(rid, U("%I64d"), (*room)->id);
 							_log.Log(_log.Time().append(rid).append(U(" has been moved into Service-Queue.")));
 

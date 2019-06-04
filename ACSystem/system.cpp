@@ -17,7 +17,7 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 	_dlocker(), _acss(), _acws(), _watcher(),
 	_onrunning(false),
 	_onstartup(false), _ccontroller(),
-	_acontroller(), _ucontroller(0x4)
+	_acontroller()
 {
 	_usr.admin.handler = _com.CreateHandler(L"Admin");
 	_usr.mgr.handler = _com.CreateHandler(L"Manager");
@@ -26,18 +26,14 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 	// initialize the communicator, distributing handlers for 
 	// rooms, administrator, manager and receptionist
 	ACUsr& usr = _usr;
-	std::for_each(roomids.begin(), roomids.end(), [&usr, &com, &dbms](int64_t roomid) {
-		usr.rooms.push_back(new Room{ roomid, dbms });
+	std::for_each(roomids.begin(), roomids.end(), [&usr, &com, &dbms, &log](int64_t roomid) {
+		usr.rooms.push_back(new Room{ roomid, dbms, log });
 
 		wchar_t rid[0xF];
 		std::swprintf(rid, L"%I64d", roomid);
 		usr.rooms.back()->handler = com.CreateHandler(rid);
+		usr.rooms.back()->Run();
 	});
-
-	_roomspr = CreateSemaphore(NULL, 0, 0xFF, NULL);
-	_mgrspr = CreateSemaphore(NULL, 0, 0xFF, NULL);
-	_rptspr = CreateSemaphore(NULL, 0, 0xFF, NULL);
-	_adminspr = CreateSemaphore(NULL, 0, 0xFF, NULL);
 }
 
 /// <summary>
@@ -57,17 +53,8 @@ ACSystem::~ACSystem()
 
 	// waiting for outer message handling over
 	_onrunning = false;
-
-	for (auto& elem : _ucontroller)
-	{
-		if (elem.joinable())
-			elem.join();
-	}
-
-	CloseHandle(_roomspr);
-	CloseHandle(_mgrspr);
-	CloseHandle(_rptspr);
-	CloseHandle(_adminspr);
+	for (auto& room : _usr.rooms)
+		delete room;
 
 	_log.Log(_log.Time().append(U("System has been stopped.")));
 }
@@ -95,11 +82,6 @@ void ACSystem::_master()
 	ACMessage msg;
 	_log.Log(_log.Time().append(U("System has been started correctly.")));
 
-	_ucontroller[0] = std::move(std::thread{ std::bind(&ACSystem::_room, this) });
-	_ucontroller[1] = std::move(std::thread{ std::bind(&ACSystem::_mgr, this) });
-	_ucontroller[2] = std::move(std::thread{ std::bind(&ACSystem::_rpt, this) });
-	_ucontroller[3] = std::move(std::thread{ std::bind(&ACSystem::_admin, this) });
-
 	while (_onrunning)
 	{
 		msg = _com.PullMessage();
@@ -111,7 +93,7 @@ void ACSystem::_master()
 		case ACMsgType::SETFANSPEED:
 		case ACMsgType::FETCHFEE:
 		case ACMsgType::TEMPNOTIFICATION:
-			_postroom(msg);
+			_room(msg);
 			break;
 
 		case ACMsgType::POWERON:
@@ -119,16 +101,16 @@ void ACSystem::_master()
 		case ACMsgType::STARTUP:
 		case ACMsgType::SHUTDOWN:
 		case ACMsgType::MONITOR:
-			_postadmin(msg);
+			_admin(msg);
 			break;
 
 		case ACMsgType::FETCHBILL:
 		case ACMsgType::FETCHINVOICE:
-			_postrpt(msg);
+			_rpt(msg);
 			break;
 
 		case ACMsgType::FETCHREPORT:
-			_postmgr(msg);
+			_mgr(msg);
 			break;
 
 		default:
@@ -190,7 +172,7 @@ void ACSystem::_check()
 				_acss.erase(towait);
 			}
 
-			_acss.push_back(new ACSObj{ (*toservice)->room, (*toservice)->tfanspeed });
+			_acss.push_back(new ACSObj{ (*toservice)->room, (*toservice)->tfanspeed, _usr.admin.frate[(*toservice)->tfanspeed] });
 			(*toservice)->room.SetFanspeed((*toservice)->tfanspeed, _usr.admin.frate[(*toservice)->tfanspeed]);
 
 			std::swprintf(rid, U("%I64d"), (*toservice)->room.id);
@@ -258,7 +240,7 @@ void ACSystem::_alive()
 						*wobj = nullptr;
 						_acws.erase(wobj);
 					}
-					(*room)->Reset();
+					(*room)->Off();
 				}
 			}
 			elem.second = false;
@@ -267,36 +249,6 @@ void ACSystem::_alive()
 
 		std::this_thread::sleep_for(std::chrono::seconds(10));
 	}
-}
 
-void ACSystem::_postroom(const ACMessage& msg)
-{
-	_roomlocker.lock();
-	_rooms.push(msg);
-	ReleaseSemaphore(_roomspr, 0x1, NULL);
-	_roomlocker.unlock();
-}
-
-void ACSystem::_postmgr(const ACMessage& msg)
-{
-	_mgrlocker.lock();
-	_mgrs.push(msg);
-	ReleaseSemaphore(_mgrspr, 0x1, NULL);
-	_mgrlocker.unlock();
-}
-
-void ACSystem::_postrpt(const ACMessage& msg)
-{
-	_rptlocker.lock();
-	_rpts.push(msg);
-	ReleaseSemaphore(_rptspr, 0x1, NULL);
-	_rptlocker.unlock();
-}
-
-void ACSystem::_postadmin(const ACMessage& msg)
-{
-	_adminlocker.lock();
-	_admins.push(msg);
-	ReleaseSemaphore(_adminspr, 0x1, NULL);
-	_adminlocker.unlock();
+	_log.Log(_log.Time().append(U("Alive thread Crashed.")));
 }

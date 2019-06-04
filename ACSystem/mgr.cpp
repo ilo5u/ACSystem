@@ -1,39 +1,24 @@
 #include "pch.h"
 #include "system.h"
 
-void ACSystem::_mgr()
+void ACSystem::_mgr(const ACMessage& msg)
 {
-	ACMessage msg;
-	while (_onrunning)
+	switch (msg.type)
 	{
-		msg.type = ACMsgType::INVALID;
-		WaitForSingleObject(_mgrspr, 1000);
-
-		_mgrlocker.lock();
-		if (_mgrs.size() > 0)
+	case ACMsgType::FETCHREPORT:
+		if (msg.body.has_field(U("RoomId"))
+			&& msg.body.has_field(U("TypeReport"))
+			&& msg.body.has_field(U("Date")))
 		{
-			msg = _mgrs.front();
-			_mgrs.pop();
+			_fetchreport(
+				msg.body.at(U("RoomId")).as_integer(),
+				(Mgr::rtype_t)msg.body.at(U("TypeReport")).as_integer(),
+				(int64_t)msg.body.at(U("Date")).as_double()
+			);
 		}
-		_mgrlocker.unlock();
-
-		switch (msg.type)
-		{
-		case ACMsgType::FETCHREPORT:
-			if (msg.body.has_field(U("RoomId"))
-				&& msg.body.has_field(U("TypeReport"))
-				&& msg.body.has_field(U("DateIn")))
-			{
-				_fetchreport(
-					msg.body.at(U("RoomId")).as_integer(),
-					(Mgr::rtype_t)msg.body.at(U("TypeReport")).as_integer(),
-					(int64_t)msg.body.at(U("DateIn")).as_double()
-				);
-			}
-			break;
-		default:
-			break;
-		}
+		break;
+	default:
+		break;
 	}
 }
 

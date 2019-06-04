@@ -28,3 +28,4 @@
 
 #include "../DBMS/dbms.h"
 #include "../Communicator/com.h"
+#include "../Logger/log.h"
