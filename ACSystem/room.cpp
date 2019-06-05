@@ -151,9 +151,9 @@ void ACSystem::_requestoff(int64_t id)
 	if (room != _usr.rooms.end())
 	{
 		handler = (*room)->handler;
+		_watcher[id] = true;
 		if ((*room)->state != Room::state_t::STOPPED)
 		{
-			_watcher[id] = true;
 			(*room)->latest = std::time(nullptr);
 			(*room)->invoice.Prepare(Invoice::opt_t::REQUESTOFF, (*room)->latest);
 			auto sobj = std::find_if(_acss.begin(), _acss.end(), [&room](const ACSObj* obj) {
@@ -225,10 +225,10 @@ void ACSystem::_settemp(int64_t id, double_t ttemp)
 	});
 	if (room != _usr.rooms.end())
 	{
+		_watcher[id] = true;
 		handler = (*room)->handler;
 		if ((*room)->state != Room::state_t::STOPPED)
 		{
-			_watcher[id] = true;
 			(*room)->latest = std::time(nullptr);
 			(*room)->invoice.Prepare(Invoice::opt_t::SETTEMP, (*room)->latest);
 			if (ttemp >= _usr.admin.ltemp && ttemp <= _usr.admin.htemp)
@@ -272,9 +272,9 @@ void ACSystem::_setfanspeed(int64_t id, Room::speed_t fanspeed)
 	if (room != _usr.rooms.end())
 	{
 		handler = (*room)->handler;
+		_watcher[id] = true;
 		if ((*room)->state != Room::state_t::STOPPED)
 		{
-			_watcher[id] = true;
 			(*room)->latest = std::time(nullptr);
 			(*room)->invoice.Prepare(Invoice::opt_t::SETFANSPEED, std::time(nullptr));
 
@@ -441,10 +441,10 @@ void ACSystem::_fetchfee(int64_t id)
 	});
 	if (room != _usr.rooms.end())
 	{
+		_watcher[id] = true;
 		handler = (*room)->handler;
 		if ((*room)->state != Room::state_t::STOPPED)
 		{
-			_watcher[id] = true;
 			(*room)->latest = std::time(nullptr);
 			msg[U("FeeRate")] = json::value::number(_usr.admin.frate[(*room)->GetFanspeed(true)]);
 			msg[U("Fee")] = json::value::number((*room)->GetTotalfee());
@@ -487,9 +487,9 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 	if (room != _usr.rooms.end())
 	{
 		handler = (*room)->handler;
+		_watcher[id] = true;
 		if ((*room)->state != Room::state_t::STOPPED)
 		{
-			_watcher[id] = true;
 			std::swprintf(tt, U("%.2lf"), (*room)->GetTargetTemp());
 			_log.Log(_log.Time().append(rid).append(U(" notifies current temperature as ")).append(ct).append(U(" , and target is ")).append(tt).append(U(" .")));
 
@@ -593,6 +593,8 @@ void ACSystem::_notify(int64_t id, double_t ctemp)
 		}
 		else
 		{
+			(*room)->latest = std::time(nullptr);
+			(*room)->ctemp = ctemp;
 			msg[U("State")] = json::value::string(U("OFF"));
 		}
 	}

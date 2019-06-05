@@ -193,7 +193,7 @@ struct Admin :
 		{Room::speed_t::HGH, 15.0}
 	};
 
-	state_t state{ state_t::READY };
+	state_t state{ state_t::OFF };
 	opt_t opt{ opt_t::IDLE };
 
 	time_t start{ 0 };

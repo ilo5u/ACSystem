@@ -1,4 +1,3 @@
-
 #include "pch.h"
 #include "system.h"
 
@@ -15,8 +14,7 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 	_com(com), _log(log), _usr(),
 	_capacity(0x3), // default capacity is 3
 	_dlocker(), _acss(), _acws(), _watcher(),
-	_onrunning(false),
-	_onstartup(false), _ccontroller(),
+	_onrunning(false), _ccontroller(),
 	_acontroller()
 {
 	_usr.admin.handler = _com.CreateHandler(L"Admin");
@@ -44,7 +42,6 @@ ACSystem::ACSystem(ACCom& com, ACLog& log, ACDbms& dbms, const std::vector<int64
 ACSystem::~ACSystem()
 {
 	// waiting for controller handling over
-	_onstartup = false;
 	if (_ccontroller.joinable())
 		_ccontroller.join();
 
@@ -81,6 +78,9 @@ void ACSystem::_master()
 {
 	ACMessage msg;
 	_log.Log(_log.Time().append(U("System has been started correctly.")));
+
+	_ccontroller = std::move(std::thread{ std::bind(&ACSystem::_check, this) });
+	_acontroller = std::move(std::thread{ std::bind(&ACSystem::_alive, this) });
 
 	while (_onrunning)
 	{
@@ -125,7 +125,7 @@ void ACSystem::_check()
 	_log.Log(_log.Time().append(U("Wait-Queue Monitor has been started correctly.")));
 	std::list<ACWObj*>::iterator toservice;
 	std::list<ACSObj*>::iterator towait;
-	while (_onstartup)
+	while (_onrunning)
 	{
 		time_t rest = INT64_MAX;
 
@@ -209,10 +209,13 @@ void ACSystem::_check()
 
 void ACSystem::_alive()
 {
-	while (_onstartup)
+	wchar_t rid[0xF];
+	std::vector<int64_t> toremove;
+	while (_onrunning)
 	{
+		toremove.clear();
 		_dlocker.lock();
-		for (auto elem : _watcher)
+		for (auto& elem : _watcher)
 		{
 			if (elem.second == false)
 			{
@@ -240,14 +243,20 @@ void ACSystem::_alive()
 						*wobj = nullptr;
 						_acws.erase(wobj);
 					}
-					(*room)->Off();
+					(*room)->Off(true);
+					toremove.push_back((*room)->id);
+
+					std::swprintf(rid, U("%I64d"), (*room)->id);
+					_log.Log(_log.Time().append(rid).append(U(" Offline.")));
 				}
 			}
 			elem.second = false;
 		}
+		for (const auto& elem : toremove)
+			_watcher.erase(elem);
 		_dlocker.unlock();
 
-		std::this_thread::sleep_for(std::chrono::seconds(10));
+		std::this_thread::sleep_for(std::chrono::seconds(15));
 	}
 
 	_log.Log(_log.Time().append(U("Alive thread Crashed.")));

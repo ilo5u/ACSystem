@@ -128,10 +128,6 @@ void ACSystem::_startup()
 		_usr.admin.opt = Admin::opt_t::STARTUP;
 		_usr.admin.state = Admin::state_t::READY;
 
-		_onstartup = true;
-		_ccontroller = std::move(std::thread{ std::bind(&ACSystem::_check, this) });
-		_acontroller = std::move(std::thread{ std::bind(&ACSystem::_alive, this) });
-
 		msg[U("state")] = json::value::string(U("ready"));
 		_log.Log(_log.Time().append(U("Start the system correctly.")));
 	}
@@ -248,13 +244,6 @@ void ACSystem::_shutdown()
 			_log.Log(_log.Time().append(U("Shutdown the system correctly.")));
 
 			_com.PushMessage(ACMessage{ handler, ACMsgType::SHUTDOWN, msg });
-
-			_onstartup = false;
-			if (_ccontroller.joinable())
-				_ccontroller.join();
-
-			if (_acontroller.joinable())
-				_acontroller.join();
 
 			_acss.clear();
 			_acws.clear();

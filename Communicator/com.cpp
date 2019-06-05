@@ -155,7 +155,7 @@ void ACCom::_handle_get(http_request message)
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
-		if (paths[0].compare(U("api")) == 0)
+		if (paths.size() > 1 && paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("on")) == 0)
 			{
@@ -327,11 +327,12 @@ void ACCom::_handle_put(http_request message)
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
-		if (paths[0].compare(U("api")) == 0)
+		if (paths.size() > 1 && paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("ac")) == 0)
 			{
-				if (paths[2].compare(U("notify")) == 0)
+				if (paths[2].compare(U("notify")) == 0 
+					&& !paths[3].empty())
 				{
 					int64_t rid = 0;
 					std::swscanf(paths[3].c_str(), U("%I64d"), &rid);
@@ -347,7 +348,7 @@ void ACCom::_handle_put(http_request message)
 					ReleaseSemaphore(_pullsemophare, 1, NULL);
 					_pulllocker.unlock();
 				}
-				else
+				else if (!paths[2].empty())
 				{
 					int64_t rid = 0;
 					std::swscanf(paths[2].c_str(), U("%I64d"), &rid);
@@ -401,7 +402,7 @@ void ACCom::_handle_post(http_request message)
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
-		if (paths[0].compare(U("api")) == 0)
+		if (paths.size() > 1 && paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("power")) == 0)
 			{
@@ -492,7 +493,7 @@ void ACCom::_handle_delete(http_request message)
 		auto paths = http::uri::split_path(http::uri::decode(message.relative_uri().path()));
 		json::value body = message.extract_json().get();
 
-		if (paths[0].compare(U("api")) == 0)
+		if (paths.size() > 1 && paths[0].compare(U("api")) == 0)
 		{
 			if (paths[1].compare(U("power")) == 0)
 			{

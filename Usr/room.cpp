@@ -60,7 +60,6 @@ json::value Report::Load(time_t datein, time_t dateout)
 	json::value report;
 	if (data.size() > 0)
 	{
-
 		for (json::array::iterator elem = data.begin(); elem != data.end(); ++elem)
 		{
 			onoff += (*elem).at(U("TimesOfOnOff")).as_integer();

@@ -95,7 +95,6 @@ private:
 	std::atomic<bool> _onrunning;
 	void _master();
 
-	std::atomic<bool> _onstartup;
 	std::thread _ccontroller;
 	void _check();
 
